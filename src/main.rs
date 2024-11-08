@@ -88,16 +88,17 @@ impl Read for UpChannelReader <'_> {
 
 #[derive(Parser)]
 struct Opts {
-    rtt: Option<String>,
-
-    #[arg(default_value_t = 0)]
-    rtt_chan: usize,
-
+    #[arg(long)]
     tty: Option<std::path::PathBuf>,
 
-    #[arg(default_value_t = 115_200)]
+    #[arg(long, default_value_t = 115_200)]
     tty_speed: u32,
 
+    #[arg(long)]
+    rtt: Option<String>,
+
+    #[arg(long, default_value_t = 0)]
+    rtt_chan: usize,
 }
 
 pub fn main() {
