@@ -49,7 +49,7 @@ fn process_data(mut source: impl Read + std::fmt::Debug) {
                 },
             };
 
-            println!("{} {}", pkt.ts, pkt.op);
+            println!("{}\t{}", pkt.ts, pkt.op);
         }
     }
 }
