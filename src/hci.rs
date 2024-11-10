@@ -1,84 +1,10 @@
-use nom::{IResult, multi, number::complete};
+use nom::{IResult, multi, number::complete::{le_u16, le_u8}, sequence::tuple};
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct DisconnectComplete {
-    status: u8,
-    handle: u16,
-    reason: u8,
-}
-
-impl DisconnectComplete {
-    fn parse(data: &'_[u8]) -> IResult<&[u8], Event> {
-        let (data, status) = complete::le_u8(data)?;
-        let (data, handle) = complete::le_u16(data)?;
-        let (data, reason) = complete::le_u8(data)?;
-
-        Ok((data, Event::DisconnectComplete(DisconnectComplete {
-            status,
-            handle,
-            reason,
-        })))
-    }
-}
-#[derive(Debug, Eq, PartialEq)]
-pub struct CommandComplete <'a> {
-    ncmd: u8,
-    op: u16,
-    param: &'a[u8],
-}
-
-impl CommandComplete <'_> {
-    fn parse(data: &'_[u8]) -> IResult<&[u8], Event> {
-        let (data, ncmd) = complete::le_u8(data)?;
-        let (data, op) = complete::le_u16(data)?;
-
-        Ok((data, Event::CommandComplete(CommandComplete {
-            ncmd,
-            op,
-            param: data,
-        })))
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct CommandStatus {
-    status: u8,
-    ncmd: u8,
-    op: u16,
-}
-
-impl CommandStatus {
-    fn parse(data: &'_[u8]) -> IResult<&[u8], Event> {
-        let (data, status) = complete::le_u8(data)?;
-        let (data, ncmd) = complete::le_u8(data)?;
-        let (data, op) = complete::le_u16(data)?;
-
-        Ok((data, Event::CommandStatus(CommandStatus {
-            status,
-            ncmd,
-            op,
-        })))
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct NumCompletedPkts {
-    handle: u16,
-    pkts: u16,
-}
-
-impl NumCompletedPkts {
-    fn parse(data: &'_[u8]) -> IResult<&[u8], Event> {
-        let (data, _n_handles) = complete::le_u8(data)?;
-        let (data, handle) = complete::le_u16(data)?;
-        let (data, pkts) = complete::le_u16(data)?;
-
-        Ok((data, Event::NumCompletedPkts(NumCompletedPkts {
-            handle,
-            pkts,
-        })))
-    }
+pub struct Event<'a> {
+    code: u8,
+    param: &'a [u8],
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -87,47 +13,131 @@ pub struct LeMeta <'a> {
     param: &'a[u8],
 }
 
-impl LeMeta <'_> {
-    fn parse(data: &'_[u8]) -> IResult<&[u8], Event> {
-        let (data, sub) = complete::le_u8(data)?;
-
-        Ok((data, Event::LeMeta(LeMeta {
-            sub,
-            param: data,
-        })))
+fn le_sub_str(sub: u8) -> &'static str {
+    match sub {
+        0x01 => "LE Connection Complete",
+        0x02 => "LE Advertising Report",
+        0x03 => "LE Connection Update Complete",
+        0x04 => "LE Read Remote Features Page 0 Complete",
+        0x05 => "LE Long Term Key Request",
+        0x06 => "LE Remote Connection Parameter Request",
+        0x07 => "LE Data Length Change",
+        0x08 => "LE Read Local P-256 Public Key Complete",
+        0x09 => "LE Generate DHKey Complete",
+        0x0a => "LE Enhanced Connection Complete [v1]",
+        0x29 => "LE Enhanced Connection Complete [v2]",
+        0x0b => "LE Directed Advertising Report",
+        0x0c => "LE PHY Update Complete",
+        0x0d => "LE Extended Advertising Report",
+        0x0e => "LE Periodic Advertising Sync Established [v1]",
+        0x24 => "LE Periodic Advertising Sync Established [v2]",
+        0x0f => "LE Periodic Advertising Report [v1]",
+        0x25 => "LE Periodic Advertising Report [v2]",
+        0x10 => "LE Periodic Advertising Sync Lost",
+        0x11 => "LE Scan Timeout",
+        0x12 => "LE Advertising Set Terminated",
+        0x13 => "LE Scan Request Received",
+        0x14 => "LE Channel Selection Algorithm",
+        0x15 => "LE Connectionless IQ Repor",
+        0x16 => "LE Connection IQ Report",
+        0x17 => "LE CTE Request Failed",
+        0x18 => "LE Periodic Advertising Sync Transfer Receive [v1]",
+        0x26 => "LE Periodic Advertising Sync Transfer Receive [v2]",
+        0x19 => "LE CIS Established [v1]",
+        0x2a => "LE CIS Established [v2]",
+        0x1a => "LE CIS Request",
+        0x1b => "LE Create BIG Complete",
+        0x1c => "LE Terminate BIG Complete",
+        0x1d => "LE BIG Sync Established",
+        0x1e => "LE BIG Sync Lost",
+        0x1f => "LE Request Peer SCA Complete",
+        0x20 => "LE Path Loss Threshold",
+        0x21 => "LE Transmit Power Reporting",
+        0x22 => "LE BIGInfo Advertising Report",
+        0x23 => "LE Subrate Change",
+        0x27 => "LE Periodic Advertising Subevent Data Request",
+        0x28 => "LE Periodic Advertising Response Report",
+        0x2b => "LE Read All Remote Features Complete",
+        0x2c => "LE CS Read Remote Supported Capabilities Complete",
+        0x2d => "LE CS Read Remote FAE Table Complete",
+        0x2e => "LE CS Security Enable Complete",
+        0x2f => "LE CS Config Complete",
+        0x30 => "LE CS Procedure Enable Complet",
+        0x31 => "LE CS Subevent Result",
+        0x32 => "LE CS Subevent Result Continue",
+        0x33 => "LE CS Test End Complete",
+        0x34 => "LE Monitored Advertisers Report",
+        0x35 => "LE Frame Space Update Complete",
+        _    => "LE <Unknown>",
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum Event <'a> {
-    DisconnectComplete(DisconnectComplete),
-    CommandComplete(CommandComplete<'a>),
-    CommandStatus(CommandStatus),
-    NumCompletedPkts(NumCompletedPkts),
-    LeMeta(LeMeta<'a>),
-    Unknown(u8, &'a[u8]),
+fn disconnect_complete(param: &[u8]) -> IResult<&[u8], (u8, u16, u8)> {
+    tuple((le_u8, le_u16, le_u8))(param)
+}
+
+fn command_complete(param: &[u8]) -> IResult<&[u8], (u8, u16)> {
+    tuple((le_u8, le_u16))(param)
+}
+
+fn command_status(param: &[u8]) -> IResult<&[u8], (u8, u8, u16)> {
+    tuple((le_u8, le_u8, le_u16))(param)
+}
+
+fn num_completed_pkts(param: &[u8]) -> IResult<&[u8], (u8, u16, u16)> {
+    tuple((le_u8, le_u16, le_u16))(param)
+}
+
+fn le_meta(param: &[u8]) -> IResult<&[u8], u8> {
+    le_u8(param)
 }
 
 impl fmt::Display for Event<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Event::DisconnectComplete(dc) => {
-                write!(f, "Disconnect Complete: status 0x{:02x} handle 0x{:04x} reason {:02x}", dc.status, dc.handle, dc.reason)
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.code {
+            0x05 => {
+                match disconnect_complete(self.param) {
+                    Ok((_, (status, handle, reason))) => {
+                        write!(f, "Disconnect Complete: status 0x{:02x} handle 0x{:04x} reason {:02x}",
+                            status, handle, reason)
+                    },
+                    Err(e) => write!(f, "Disconnect Complete failed to parse: {:?}", e),
+                }
             },
-            Event::CommandComplete(cc) => {
-                write!(f, "Command Complete: ncmd {} op 0x{:02x} param {:02x?}", cc.ncmd, cc.op, cc.param)
+            0x0e => {
+                match command_complete(self.param) {
+                    Ok((rem, (ncmd, op))) => {
+                        write!(f, "Command Complete: ncmd {} op 0x{:02x} param {:02x?}", ncmd, op, rem)
+                    },
+                    Err(e) => write!(f, "Command Complete failed to parse: {:?}", e),
+                }
             },
-            Event::CommandStatus(cs) => {
-                write!(f, "Command Status: status 0x{:02x} ncmd {} op 0x{:04x}", cs.status, cs.ncmd, cs.op)
+            0x0f => {
+                match command_status(self.param) {
+                    Ok((_, (status, ncmd, op))) => {
+                        write!(f, "Command Status: status 0x{:02x} ncmd {} op 0x{:04x}", status, ncmd, op)
+                    },
+                    Err(e) => write!(f, "Command Status failed to parse: {:?}", e),
+                }
             },
-            Event::NumCompletedPkts(nc) => {
-                write!(f, "Number Of Completed Packets: handle 0x{:04x} pkts {}", nc.handle, nc.pkts)
+            0x13 => {
+                match num_completed_pkts(self.param) {
+                    Ok((_, (_n_handles, handle, pkts))) => {
+                        write!(f, "Number Of Completed Packets: handle 0x{:04x} pkts {}", handle, pkts)
+                    },
+                    Err(e) => write!(f, "Number Of Completed Packets failed to parse: {:?}", e),
+                }
             },
-            Event::LeMeta(cc) => {
-                write!(f, "LE Meta: sub 0x{:02x} param {:02x?}", cc.sub, cc.param)
+            0x3e => {
+                match le_meta(self.param) {
+                    Ok((rem, sub)) => {
+                        write!(f, "{} (0x{:02x}) param {:02x?}", le_sub_str(sub), sub, rem)
+                    },
+                    Err(e) => write!(f, "LE Meta failed to parse: {:?}", e),
+                }
             },
-            Event::Unknown(e, d) => {
-                write!(f, "0x{:02x} (Unknown): {:02x?}", e, d)
+            _ => {
+                write!(f, "0x{:02x} (Unknown): {:02x?}", self.code, self.param)
             },
         }
     }
@@ -135,17 +145,10 @@ impl fmt::Display for Event<'_> {
 
 impl Event <'_> {
     pub fn parse(data: &'_[u8]) -> IResult<&[u8], Event> {
-        let (data, code) = complete::le_u8(data)?;
-        let (data, param) = multi::length_data(complete::le_u8)(data)?;
+        let (data, code) = le_u8(data)?;
+        let (data, param) = multi::length_data(le_u8)(data)?;
 
-        match code {
-            0x05 => DisconnectComplete::parse(param),
-            0x0e => CommandComplete::parse(param),
-            0x0f => CommandStatus::parse(param),
-            0x13 => NumCompletedPkts::parse(param),
-            0x3e => LeMeta::parse(param),
-            _    => Ok((data, Event::Unknown(code, param))),
-        }
+        Ok((data, Event { code, param }))
     }
 }
 
@@ -157,8 +160,8 @@ pub struct Command <'a> {
 
 impl Command <'_> {
     pub fn parse(data: &'_[u8]) -> IResult<&[u8], Command> {
-        let (data, op) = complete::le_u16(data)?;
-        let (data, param) = multi::length_data(complete::le_u8)(data)?;
+        let (data, op) = le_u16(data)?;
+        let (data, param) = multi::length_data(le_u8)(data)?;
 
         Ok((data, Command { op, param }))
     }
