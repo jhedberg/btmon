@@ -1,23 +1,17 @@
 use std::{fmt, str};
 use nom::{IResult, bytes, number, multi};
 use time::Time;
+use num_enum::FromPrimitive;
 use crate::hci;
 
-#[derive(Debug, Eq, PartialEq)]
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, FromPrimitive)]
 pub enum IndexType {
     Primary,
     Amp,
-    Unknown(u8),
-}
 
-impl From<u8> for IndexType {
-    fn from(raw: u8) -> IndexType {
-        match raw {
-            0 => IndexType::Primary,
-            1 => IndexType::Amp,
-            _ => IndexType::Unknown(raw),
-        }
-    }
+    #[num_enum(catch_all)]
+    Unknown(u8),
 }
 
 impl fmt::Display for IndexType {
@@ -30,7 +24,8 @@ impl fmt::Display for IndexType {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, FromPrimitive)]
 pub enum IndexBus {
     Virtual,
     Usb,
@@ -44,28 +39,9 @@ pub enum IndexBus {
     Smd,
     Virtio,
     Ipm,
-    Unknown(u8),
-}
 
-impl From<u8> for IndexBus {
-    fn from(raw: u8) -> IndexBus {
-        use IndexBus::*;
-        match raw {
-            0  => Virtual,
-            1  => Usb,
-            2  => PcCard,
-            3  => Uart,
-            4  => Rs232,
-            5  => Pci,
-            6  => Sdio,
-            7  => Spi,
-            8  => I2c,
-            9  => Smd,
-            10 => Virtio,
-            11 => Ipm,
-            _  => Unknown(raw),
-        }
-    }
+    #[num_enum(catch_all)]
+    Unknown(u8),
 }
 
 impl fmt::Display for IndexBus {

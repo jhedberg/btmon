@@ -1,4 +1,5 @@
 use nom::{IResult, multi, number::complete::{le_u16, le_u8}, sequence::tuple};
+use num_enum::FromPrimitive;
 use std::fmt;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -188,7 +189,7 @@ macro_rules! ocf {
 use Ogf::*;
 
 #[repr(u16)]
-#[derive(Debug, PartialEq, Eq, num_enum::FromPrimitive)]
+#[derive(Debug, PartialEq, Eq, FromPrimitive)]
 pub enum Op {
     // Link Control commands
     Inquiry                      = op!(LinkControl, 0x0001),
