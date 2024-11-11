@@ -1,5 +1,5 @@
 use std::{fmt, str};
-use nom::{IResult, bytes, number, multi};
+use nom::{IResult, bytes, number, multi::length_data};
 use time::Time;
 use num_enum::FromPrimitive;
 use crate::hci;
@@ -161,7 +161,7 @@ impl fmt::Display for UserLogging<'_> {
 impl UserLogging <'_> {
     fn parse(data: &'_ [u8]) -> IResult<&[u8], Op> {
         let (data, prio) = number::complete::le_u8(data)?;
-        let (data, raw_id) = multi::length_data(number::complete::le_u8)(data)?;
+        let (data, raw_id) = length_data(number::complete::le_u8)(data)?;
         let (_, id) = get_utf8(raw_id)?;
         let (data, msg) = get_utf8(data)?;
 

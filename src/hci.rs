@@ -1,4 +1,4 @@
-use nom::{IResult, multi, number::complete::{le_u16, le_u8}, sequence::tuple};
+use nom::{IResult, multi::length_data, number::complete::{le_u16, le_u8}, sequence::tuple};
 use num_enum::FromPrimitive;
 use std::fmt;
 
@@ -147,7 +147,7 @@ impl fmt::Display for Event<'_> {
 impl Event <'_> {
     pub fn parse(data: &'_[u8]) -> IResult<&[u8], Event> {
         let (data, code) = le_u8(data)?;
-        let (data, param) = multi::length_data(le_u8)(data)?;
+        let (data, param) = length_data(le_u8)(data)?;
 
         Ok((data, Event { code, param }))
     }
@@ -382,7 +382,7 @@ pub struct Command <'a> {
 
 impl Command <'_> {
     pub fn parse(data: &'_[u8]) -> IResult<&[u8], Command> {
-        let (data, (op_raw, param)) = tuple((le_u16, multi::length_data(le_u8)))(data)?;
+        let (data, (op_raw, param)) = tuple((le_u16, length_data(le_u8)))(data)?;
         Ok((data, Command { op: Op::from(op_raw), param }))
     }
 }

@@ -1,4 +1,4 @@
-use nom::{IResult, multi, number};
+use nom::{IResult, multi:length_data, sequence::tuple, number::{streaming, complete::{le_u8, le_u16, le_u32}}};
 use crate::monitor;
 use time::{Time, Duration};
 
@@ -18,39 +18,39 @@ pub enum ExtHeader {
 fn parse_ext(data: &[u8]) -> IResult<&[u8], ExtHeader> {
     use ExtHeader::*;
 
-    let (data, hdr) = number::complete::le_u8(data)?;
+    let (data, hdr) = le_u8(data)?;
 
     match hdr {
         1 => {
-            let (data, drops) = number::complete::le_u8(data)?;
+            let (data, drops) = le_u8(data)?;
             Ok((data, CommandDrops(drops)))
         },
         2 => {
-            let (data, drops) = number::complete::le_u8(data)?;
+            let (data, drops) = le_u8(data)?;
             Ok((data, EventDrops(drops)))
         },
         3 => {
-            let (data, drops) = number::complete::le_u8(data)?;
+            let (data, drops) = le_u8(data)?;
             Ok((data, AclTxDrops(drops)))
         },
         4 => {
-            let (data, drops) = number::complete::le_u8(data)?;
+            let (data, drops) = le_u8(data)?;
             Ok((data, AclRxDrops(drops)))
         },
         5 => {
-            let (data, drops) = number::complete::le_u8(data)?;
+            let (data, drops) = le_u8(data)?;
             Ok((data, ScoTxDrops(drops)))
         },
         6 => {
-            let (data, drops) = number::complete::le_u8(data)?;
+            let (data, drops) = le_u8(data)?;
             Ok((data, ScoRxDrops(drops)))
         },
         7 => {
-            let (data, drops) = number::complete::le_u8(data)?;
+            let (data, drops) = le_u8(data)?;
             Ok((data, OtherDrops(drops)))
         },
         8 => {
-            let (data, ts) = number::complete::le_u32(data)?;
+            let (data, ts) = le_u32(data)?;
             Ok((data, TimeStamp(ts)))
         },
         _ => Ok((data, Unknown(hdr))),
@@ -58,12 +58,9 @@ fn parse_ext(data: &[u8]) -> IResult<&[u8], ExtHeader> {
 }
 
 pub fn parse_data(input: &[u8]) -> IResult<&[u8], monitor::Packet> {
-    let (input, frame) = multi::length_data(number::streaming::le_u16)(input)?;
-
+    let (input, frame) = length_data(streaming::le_u16)(input)?;
+    let (frame, (opcode, _flags, mut ext)) = tuple((le_u16, le_u8, length_data(le_u8)))(frame)?;
     let mut ts = Time::MIDNIGHT;
-    let (frame, opcode) = number::complete::le_u16(frame)?;
-    let (frame, _flags) = number::complete::le_u8(frame)?;
-    let (frame, mut ext) = multi::length_data(number::complete::le_u8)(frame)?;
 
     while let Ok((rem, hdr)) = parse_ext(ext) {
         use ExtHeader::*;
