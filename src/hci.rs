@@ -367,7 +367,7 @@ impl fmt::Display for Op {
             LeReadMaxDataLength          => write!(f, "LE Read Maximum Data Length"),
 
             Unknown(op) => {
-                write!(f, "op 0x{:02x} (OGF 0x{:02x} OCF 0x{:04x})", op, ogf!(op), ocf!(op))
+                write!(f, "Unknown OGF 0x{:02x} OCF 0x{:04x} (0x{:02x})", ogf!(op), ocf!(op), op)
             },
         }
     }
@@ -388,7 +388,7 @@ impl Command <'_> {
 
 impl fmt::Display for Command<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} param {:02x?}", self.op, self.param)
+        write!(f, "{}: {:02x?}", self.op, self.param)
     }
 }
 

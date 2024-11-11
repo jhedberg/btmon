@@ -152,11 +152,11 @@ impl fmt::Display for LogPriority {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use LogPriority::*;
         match self {
-            Err => write!(f, "err"),
-            Warn => write!(f, "warn"),
-            Info => write!(f, "info"),
-            Dbg => write!(f, "dbg"),
-            None => write!(f, "none"),
+            Err => write!(f, "E"),
+            Warn => write!(f, "W"),
+            Info => write!(f, "I"),
+            Dbg => write!(f, "D"),
+            None => write!(f, ""),
         }
     }
 }
@@ -184,7 +184,7 @@ pub struct UserLogging <'a> {
 
 impl fmt::Display for UserLogging<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[{}] {}: {}", self.prio, self.id, self.msg)
+        write!(f, "{}({}) {}", self.prio, self.id, self.msg)
     }
 }
 
@@ -228,19 +228,19 @@ impl fmt::Display for Op<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Op::NewIndex(m) => {
-                write!(f, "New Index: {}", m)
+                write!(f, "New Index:\t{}", m)
             },
             Op::OpenIndex => {
                 write!(f, "Open Index")
             },
             Op::UserLogging(m) => {
-                write!(f, "User Logging: {}", m)
+                write!(f, "User Logging:\t{}", m)
             },
             Op::CommandPkt(c) => {
-                write!(f, "HCI Command: {}", c)
+                write!(f, "HCI Command:\t{}", c)
             },
             Op::EventPkt(e) => {
-                write!(f, "HCI Event: {}", e)
+                write!(f, "HCI Event:\t{}", e)
             },
             _ => write!(f, "{:02x?}", self),
         }
