@@ -115,38 +115,32 @@ impl fmt::Display for NewIndex<'_> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, FromPrimitive)]
 pub enum LogPriority {
-    Err,
-    Warn,
-    Info,
-    Dbg,
-    None,
+    Emerg  = 0,
+    Alert  = 1,
+    Crit   = 2,
+    Err    = 3,
+    Warn   = 4,
+    Notice = 5,
+    Info   = 6,
+    Dbg    = 7,
+
+    #[num_enum(catch_all)]
+    Unknown(u8),
 }
 
 impl fmt::Display for LogPriority {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use LogPriority::*;
         match self {
-            Err => write!(f, "E"),
-            Warn => write!(f, "W"),
-            Info => write!(f, "I"),
-            Dbg => write!(f, "D"),
-            None => write!(f, ""),
-        }
-    }
-}
-
-impl From<u8> for LogPriority {
-    fn from(val: u8) -> LogPriority {
-        use LogPriority::*;
-
-        match val {
-            3 => Err,
-            4 => Warn,
-            6 => Info,
-            7 => Dbg,
-            _ => None,
+            Err             => write!(f, "E"),
+            Warn            => write!(f, "W"),
+            Info            => write!(f, "I"),
+            Dbg             => write!(f, "D"),
+            Unknown(p) => write!(f, "{p}"),
+            _               => write!(f, ""),
         }
     }
 }
