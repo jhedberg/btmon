@@ -9,3 +9,4 @@ nom = "7.1.3"
 serialport = "4.6.0"
 time = "0.3.36"
 probe-rs = { git = "https://github.com/probe-rs/probe-rs" }
+num_enum = "0.7.3"
