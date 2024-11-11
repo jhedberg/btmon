@@ -392,8 +392,3 @@ impl fmt::Display for Command<'_> {
         write!(f, "{}: {:02x?}", self.op, self.param)
     }
 }
-
-//pub struct AclData <'a> {
-//    handle: u16,
-//    data: &'a[u8],
-//}

@@ -1,4 +1,4 @@
-use nom::{IResult, multi:length_data, sequence::tuple, number::{streaming, complete::{le_u8, le_u16, le_u32}}};
+use nom::{IResult, multi::length_data, sequence::tuple, number::{streaming, complete::{le_u8, le_u16, le_u32}}};
 use crate::monitor;
 use time::{Time, Duration};
 

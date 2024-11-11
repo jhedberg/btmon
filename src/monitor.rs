@@ -1,5 +1,5 @@
 use std::{fmt, str};
-use nom::{IResult, bytes, number, multi::length_data};
+use nom::{IResult, sequence::tuple, bytes, number::complete::{le_u8, le_u16}, multi::length_data};
 use time::Time;
 use num_enum::FromPrimitive;
 use crate::hci;
@@ -95,8 +95,8 @@ pub struct NewIndex <'a> {
 
 impl NewIndex <'_> {
     fn parse(data: &'_[u8]) -> IResult<&[u8], Op> {
-        let (data, type_raw) = number::complete::le_u8(data)?;
-        let (data, bus_raw) = number::complete::le_u8(data)?;
+        let (data, type_raw) = le_u8(data)?;
+        let (data, bus_raw) = le_u8(data)?;
         let (data, bdaddr) = bytes::complete::take(6usize)(data)?;
         let (data, name) = get_utf8(data)?;
 
@@ -160,12 +160,36 @@ impl fmt::Display for UserLogging<'_> {
 
 impl UserLogging <'_> {
     fn parse(data: &'_ [u8]) -> IResult<&[u8], Op> {
-        let (data, prio) = number::complete::le_u8(data)?;
-        let (data, raw_id) = length_data(number::complete::le_u8)(data)?;
+        let (data, prio) = le_u8(data)?;
+        let (data, raw_id) = length_data(le_u8)(data)?;
         let (_, id) = get_utf8(raw_id)?;
         let (data, msg) = get_utf8(data)?;
 
         Ok((data, Op::UserLogging(UserLogging { prio: LogPriority::from(prio), id, msg })))
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct AclPkt <'a> {
+    handle: u16,
+    pb: u8,
+    bc: u8,
+    data: &'a[u8],
+}
+
+impl fmt::Display for AclPkt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "handle 0x{:04x} pb {:02b} bc {:02b}: {:02x?}", self.handle, self.pb, self.bc, self.data)
+    }
+}
+
+impl AclPkt <'_> {
+    fn parse(frame: &'_ [u8]) -> IResult<&[u8], AclPkt> {
+        let (rem, (mut handle, data)) = tuple((le_u16, length_data(le_u16)))(frame)?;
+        let pb: u8 = (handle >> 12) as u8 & 0b11;
+        let bc: u8 = (handle >> 14) as u8 & 0b11;
+        handle &= 0b111111111111;
+        Ok((rem, AclPkt { handle, pb, bc, data} ))
     }
 }
 
@@ -175,8 +199,8 @@ pub enum Op <'a> {
     DelIndex,
     CommandPkt(hci::Command<'a>),
     EventPkt(hci::Event<'a>),
-    AclTxPkt(&'a[u8]),
-    AclRxPkt(&'a[u8]),
+    AclTxPkt(AclPkt<'a>),
+    AclRxPkt(AclPkt<'a>),
     ScoTxPkt(&'a[u8]),
     ScoRxPkt(&'a[u8]),
     OpenIndex,
@@ -198,19 +222,25 @@ impl fmt::Display for Op<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Op::NewIndex(m) => {
-                write!(f, "New Index:\t{}", m)
+                write!(f, "New Index:    {}", m)
             },
             Op::OpenIndex => {
                 write!(f, "Open Index")
             },
             Op::UserLogging(m) => {
-                write!(f, "User Logging:\t{}", m)
+                write!(f, "User Logging: {}", m)
             },
             Op::CommandPkt(c) => {
-                write!(f, "HCI Command:\t{}", c)
+                write!(f, "HCI Command:  {}", c)
             },
             Op::EventPkt(e) => {
-                write!(f, "HCI Event:\t{}", e)
+                write!(f, "HCI Event:    {}", e)
+            },
+            Op::AclTxPkt(p) => {
+                write!(f, "ACL TX:       {}", p)
+            },
+            Op::AclRxPkt(p) => {
+                write!(f, "ACL RX:       {}", p)
             },
             _ => write!(f, "{:02x?}", self),
         }
@@ -236,8 +266,14 @@ fn parse_packet(op: u16, data: &[u8]) -> IResult<&[u8], Op> {
             Ok((data, ev)) => Ok((data, Op::EventPkt(ev))),
             Err(e) => Err(e),
         },
-        4  => Ok((data, Op::AclTxPkt(data))),
-        5  => Ok((data, Op::AclRxPkt(data))),
+        4  => match AclPkt::parse(data) {
+            Ok((data, pkt)) => Ok((data, Op::AclTxPkt(pkt))),
+            Err(e) => Err(e),
+        }
+        5  => match AclPkt::parse(data) {
+            Ok((data, pkt)) => Ok((data, Op::AclRxPkt(pkt))),
+            Err(e) => Err(e),
+        }
         6  => Ok((data, Op::ScoTxPkt(data))),
         7  => Ok((data, Op::ScoTxPkt(data))),
         8  => Ok((data, Op::OpenIndex)),
