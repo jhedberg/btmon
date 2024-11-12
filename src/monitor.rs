@@ -3,6 +3,7 @@ use nom::{IResult, sequence::tuple, bytes, number::complete::{le_u8, le_u16}, mu
 use time::Time;
 use num_enum::FromPrimitive;
 use crate::hci;
+use crate::l2cap;
 
 #[repr(u8)]
 #[derive(Debug, Eq, PartialEq, FromPrimitive)]
@@ -179,7 +180,15 @@ pub struct AclPkt <'a> {
 
 impl fmt::Display for AclPkt<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "handle 0x{:04x} pb {:02b} bc {:02b}: {:02x?}", self.handle, self.pb, self.bc, self.data)
+        match l2cap::Frame::parse(self.data) {
+            Ok((_, frame)) => {
+                write!(f, "handle 0x{:04x} pb {:02b} bc {:02b}: {}", self.handle, self.pb, self.bc, frame)
+            },
+            Err(_) => {
+                write!(f, "handle 0x{:04x} pb {:02b} bc {:02b}: {:02x?}", self.handle, self.pb, self.bc, self.data)
+            }
+        }
+
     }
 }
 
