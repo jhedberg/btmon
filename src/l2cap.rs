@@ -1,6 +1,7 @@
-use nom::{IResult, bytes::complete::take, sequence::tuple, number::complete::le_u16};
+use nom::{IResult, bytes::complete::take, sequence::tuple, number::complete::{le_u16, le_u8}};
 use num_enum::FromPrimitive;
 use std::fmt;
+use crate::att;
 
 #[repr(u16)]
 #[derive(Debug, PartialEq, Eq, FromPrimitive)]
@@ -49,6 +50,16 @@ impl Frame <'_> {
 
 impl fmt::Display for Frame<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {:02x?}", self.cid, self.data)
+        use Cid::*;
+
+        match self.cid {
+            Att => {
+                match att::Pdu::parse(self.data) {
+                    Ok((_, pdu)) => write!(f, "ATT: {}", pdu),
+                    Err(_) => write!(f, "{}: {:02x?}", self.cid, self.data),
+                }
+            },
+            _ => write!(f, "{}: {:02x?}", self.cid, self.data),
+        }
     }
 }
