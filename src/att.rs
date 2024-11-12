@@ -1,4 +1,4 @@
-use nom::{IResult, bytes::complete::take, sequence::tuple, number::complete::{le_u16, le_u8}};
+use nom::{IResult, bytes::complete::take, number::complete::le_u8};
 use num_enum::FromPrimitive;
 use std::fmt;
 
