@@ -1,4 +1,4 @@
-use nom::{IResult, bytes::complete::take, sequence::tuple, number::complete::{le_u16, le_u8}};
+use nom::{IResult, bytes::complete::take, sequence::tuple, number::complete::le_u16};
 use num_enum::FromPrimitive;
 use std::fmt;
 use crate::att;

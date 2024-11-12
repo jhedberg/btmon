@@ -1,4 +1,4 @@
-use nom::{IResult, bytes::complete::take, sequence::tuple, number::complete::{le_u16, le_u8}};
+use nom::{IResult, bytes::complete::take, number::complete::le_u8};
 use num_enum::FromPrimitive;
 use std::fmt;
 
@@ -57,6 +57,6 @@ impl Pdu <'_> {
 
 impl fmt::Display for Pdu<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "opcode {:?} param {:02x?}", self.opcode, self.param)
+        write!(f, "{:?} {:02x?}", self.opcode, self.param)
     }
 }
