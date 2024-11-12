@@ -15,16 +15,6 @@ pub enum IndexType {
     Unknown(u8),
 }
 
-impl fmt::Display for IndexType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            IndexType::Primary => write!(f, "Primary"),
-            IndexType::Amp => write!(f, "AMP"),
-            IndexType::Unknown(t) => write!(f, "Unknown (0x{:02x?})", t),
-        }
-    }
-}
-
 #[repr(u8)]
 #[derive(Debug, Eq, PartialEq, FromPrimitive)]
 pub enum IndexBus {
@@ -43,27 +33,6 @@ pub enum IndexBus {
 
     #[num_enum(catch_all)]
     Unknown(u8),
-}
-
-impl fmt::Display for IndexBus {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use IndexBus::*;
-        match self {
-            Virtual => write!(f, "Virtual"),
-            Usb     => write!(f, "USB"),
-            PcCard  => write!(f, "PC Card"),
-            Uart    => write!(f, "UART"),
-            Rs232   => write!(f, "RS232"),
-            Pci     => write!(f, "PCI"),
-            Sdio    => write!(f, "SDIO"),
-            Spi     => write!(f, "SPI"),
-            I2c     => write!(f, "I2C"),
-            Smd     => write!(f, "SMD"),
-            Virtio  => write!(f, "VirtIO"),
-            Ipm     => write!(f, "IPM"),
-            Unknown(v) => write!(f, "Unknown (0x{:02x})", v),
-        }
-    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -112,7 +81,7 @@ impl NewIndex <'_> {
 
 impl fmt::Display for NewIndex<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "type {} bus {} addr {} name {}", self.ctrl_type, self.bus, self.addr, self.name)
+        write!(f, "type {:?} bus {:?} addr {} name {}", self.ctrl_type, self.bus, self.addr, self.name)
     }
 }
 
@@ -132,20 +101,6 @@ pub enum LogPriority {
     Unknown(u8),
 }
 
-impl fmt::Display for LogPriority {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use LogPriority::*;
-        match self {
-            Err             => write!(f, "E"),
-            Warn            => write!(f, "W"),
-            Info            => write!(f, "I"),
-            Dbg             => write!(f, "D"),
-            Unknown(p) => write!(f, "{p}"),
-            _               => write!(f, ""),
-        }
-    }
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct UserLogging <'a> {
     prio: LogPriority,
@@ -155,7 +110,7 @@ pub struct UserLogging <'a> {
 
 impl fmt::Display for UserLogging<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}({}) {}", self.prio, self.id, self.msg)
+        write!(f, "{}", self.msg)
     }
 }
 
