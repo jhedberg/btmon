@@ -6,7 +6,7 @@
 //! values in later reads, writes and notifications.
 
 use crate::assigned::uuid16_name;
-use crate::context::{AttRequest, AttState, IndexState, LinkType};
+use crate::context::{AttRequest, AttState, IndexState, LinkType, Pending};
 use crate::field;
 use crate::hci::common::{appearance, bits, conn_interval_value, hexstr};
 use crate::reader::{Reader, Result};
@@ -104,8 +104,10 @@ pub fn decode(st: &mut IndexState, handle: u16, rx: bool, payload: &[u8], out: &
         return;
     };
     field!(out, "ATT: {} (0x{:02x}) len {}", name, op, r.remaining());
+    let ts = st.cur_ts;
     let att = &mut st.conn_or_insert(handle, LinkType::Unknown).att;
-    out.nest(|o| match pdu(att, op, rx, &mut r, o, frame) {
+    att.answered = None;
+    out.nest(|o| match pdu(att, op, rx, &mut r, o, frame, ts) {
         Ok(()) if r.is_empty() => {}
         Ok(()) => {
             o.error("Unexpected trailing data");
@@ -116,11 +118,15 @@ pub fn decode(st: &mut IndexState, handle: u16, rx: bool, payload: &[u8], out: &
             o.hex(r.rest());
         }
     });
+    let answered = st.conn_mut(handle).and_then(|c| c.att.answered.take());
+    if let Some(req) = answered {
+        st.link_to(req);
+    }
 }
 
-fn pdu(att: &mut AttState, op: u8, rx: bool, r: &mut Reader<'_>, o: &mut Out, frame: u64) -> Result<()> {
+fn pdu(att: &mut AttState, op: u8, rx: bool, r: &mut Reader<'_>, o: &mut Out, frame: u64, ts: Option<hcimon_capture::Timestamp>) -> Result<()> {
     if is_request(op) {
-        push_pending(att, op, rx, r.peek(), frame);
+        push_pending(att, op, rx, r.peek(), frame, ts);
     }
     match op {
         0x01 => error_response(att, rx, r, o),
@@ -186,11 +192,11 @@ fn pdu(att: &mut AttState, op: u8, rx: bool, r: &mut Reader<'_>, o: &mut Out, fr
 // ---------------------------------------------------------------------------
 // Request tracking
 
-fn push_pending(att: &mut AttState, op: u8, rx: bool, params: &[u8], frame: u64) {
+fn push_pending(att: &mut AttState, op: u8, rx: bool, params: &[u8], frame: u64, ts: Option<hcimon_capture::Timestamp>) {
     while att.pending.len() >= MAX_PENDING {
         att.pending.pop_front();
     }
-    att.pending.push_back(AttRequest { opcode: op, tx: !rx, params: params.to_vec(), frame });
+    att.pending.push_back(AttRequest { opcode: op, tx: !rx, params: params.to_vec(), frame, ts });
 }
 
 /// Remove and return the oldest outstanding request with opcode `op` that a PDU
@@ -198,7 +204,9 @@ fn push_pending(att: &mut AttState, op: u8, rx: bool, params: &[u8], frame: u64)
 /// that was transmitted, and vice versa.
 fn take_pending(att: &mut AttState, op: u8, rx: bool) -> Option<AttRequest> {
     let i = att.pending.iter().position(|p| p.opcode == op && p.tx == rx)?;
-    att.pending.remove(i)
+    let req = att.pending.remove(i)?;
+    att.answered = Some(Pending { frame: req.frame, ts: req.ts });
+    Some(req)
 }
 
 /// First 16-bit parameter of a request (the attribute handle of most requests).

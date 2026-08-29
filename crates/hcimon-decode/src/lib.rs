@@ -66,6 +66,24 @@ impl Layer {
     }
 }
 
+/// How one packet relates to another (request/response pairing).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkKind {
+    /// This packet answers the referenced frame.
+    ResponseTo,
+    /// This packet was answered by the referenced frame (filled in by the consumer).
+    AnsweredBy,
+}
+
+/// A reference from one packet to another, in per-controller frame numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Link {
+    pub kind: LinkKind,
+    pub frame: u64,
+    /// Time between the two packets in microseconds, when both are timestamped.
+    pub elapsed_us: Option<i64>,
+}
+
 /// A decoded monitor packet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decoded {
@@ -91,6 +109,8 @@ pub struct Decoded {
     pub indent: usize,
     /// Per-controller frame number (1-based) or 0 for records without a controller.
     pub frame: u64,
+    /// Requests this packet answers.
+    pub links: Vec<Link>,
 }
 
 impl Decoded {

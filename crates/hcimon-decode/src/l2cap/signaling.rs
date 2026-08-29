@@ -175,6 +175,7 @@ pub fn decode(st: &mut IndexState, handle: u16, rx: bool, le: bool, payload: &[u
             Some(n) => field!(out, "{}: {} (0x{:02x}) ident {} len {}", label, n, code, ident, len),
             None => out.unknown(format!("{label}: Unknown (0x{code:02x}) ident {ident} len {len}")),
         };
+        track_transaction(st, handle, rx, ident, code);
         out.nest(|o| {
             let mut p = Reader::new(data);
             match command(st, handle, rx, le, ident, code, &mut p, o) {
@@ -193,6 +194,24 @@ pub fn decode(st: &mut IndexState, handle: u16, rx: bool, le: bool, payload: &[u
                 }
             }
         });
+    }
+}
+
+/// Remember requests by identifier and link responses (and rejects) to them.
+fn track_transaction(st: &mut IndexState, handle: u16, rx: bool, ident: u8, code: u8) {
+    let is_request = matches!(code, 0x02 | 0x04 | 0x06 | 0x08 | 0x0a | 0x0c | 0x0e | 0x10 | 0x12 | 0x14 | 0x17 | 0x19);
+    let is_response = matches!(code, 0x01 | 0x03 | 0x05 | 0x07 | 0x09 | 0x0b | 0x0d | 0x0f | 0x11 | 0x13 | 0x15 | 0x18 | 0x1a);
+    if is_request {
+        let p = st.pending();
+        let conn = st.conn_or_insert(handle, LinkType::Unknown);
+        if conn.l2cap.pending_reqs.len() > 64 {
+            conn.l2cap.pending_reqs.clear();
+        }
+        conn.l2cap.pending_reqs.insert((!rx, ident), p);
+    } else if is_response {
+        if let Some(req) = st.conn_mut(handle).and_then(|c| c.l2cap.pending_reqs.remove(&(rx, ident))) {
+            st.link_to(req);
+        }
     }
 }
 

@@ -4,6 +4,17 @@ use std::collections::{HashMap, VecDeque};
 
 use crate::reader::BdAddr;
 use crate::uuid::Uuid;
+use crate::{Link, LinkKind};
+
+/// A request waiting for its answer: the frame it was sent in and when.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pending {
+    pub frame: u64,
+    pub ts: Option<hcimon_capture::Timestamp>,
+}
+
+/// Longest queue of unanswered commands kept per opcode.
+const MAX_PENDING_CMDS: usize = 16;
 
 /// Tunables that affect decoding.
 #[derive(Debug, Clone)]
@@ -112,6 +123,10 @@ pub struct L2capState {
     pub pending: HashMap<u8, (u16, u16)>,
     /// Pending enhanced credit based connection requests: `(psm, source cids)`.
     pub pending_ecred: HashMap<u8, (u16, Vec<u16>)>,
+    /// Unanswered signaling requests keyed by `(sent by the local host, identifier)`.
+    pub pending_reqs: HashMap<(bool, u8), Pending>,
+    /// Unanswered SDP transactions keyed by `(sent by the local host, transaction id)`.
+    pub sdp_pending: HashMap<(bool, u16), Pending>,
     /// Incomplete ACL fragments per direction (`false` = TX, `true` = RX).
     pub reassembly: [Option<Reassembly>; 2],
 }
@@ -141,11 +156,13 @@ pub struct AttState {
     pub attr_types: HashMap<u16, Uuid>,
     /// Characteristic value handle → characteristic UUID, learned from discovery.
     pub char_values: HashMap<u16, Uuid>,
+    /// The request answered by the PDU being decoded, for linking.
+    pub answered: Option<Pending>,
 }
 
 impl Default for AttState {
     fn default() -> Self {
-        AttState { mtu: 23, pending: VecDeque::new(), attr_types: HashMap::new(), char_values: HashMap::new() }
+        AttState { mtu: 23, pending: VecDeque::new(), attr_types: HashMap::new(), char_values: HashMap::new(), answered: None }
     }
 }
 
@@ -158,6 +175,7 @@ pub struct AttRequest {
     /// Copy of the request parameters.
     pub params: Vec<u8>,
     pub frame: u64,
+    pub ts: Option<hcimon_capture::Timestamp>,
 }
 
 /// Everything known about one controller (an HCI index).
@@ -176,6 +194,12 @@ pub struct IndexState {
     pub adv_sets: HashMap<u8, AdvSet>,
     /// Last frame's timestamp, if any.
     pub last_ts: Option<hcimon_capture::Timestamp>,
+    /// Timestamp of the packet being decoded.
+    pub cur_ts: Option<hcimon_capture::Timestamp>,
+    /// Links produced while decoding the current packet.
+    pub links: Vec<Link>,
+    /// Commands awaiting Command Complete / Command Status, per opcode.
+    pub pending_cmds: HashMap<u16, VecDeque<Pending>>,
     /// Manufacturer-specific event prefix (Microsoft extension) if configured.
     pub msft_evt_prefix: Vec<u8>,
 }
@@ -207,6 +231,37 @@ impl IndexState {
     /// Manufacturer to use for vendor-specific decoding.
     pub fn manufacturer(&self, options: &Options) -> Option<u16> {
         self.manufacturer.or(options.fallback_manufacturer)
+    }
+
+    /// The packet being decoded, as something to wait for an answer to.
+    pub fn pending(&self) -> Pending {
+        Pending { frame: self.frames, ts: self.cur_ts }
+    }
+
+    /// Record that the packet being decoded answers `req`.
+    pub fn link_to(&mut self, req: Pending) {
+        let elapsed_us = match (self.cur_ts, req.ts) {
+            (Some(now), Some(then)) => Some(now.micros_since(then)),
+            _ => None,
+        };
+        self.links.push(Link { kind: LinkKind::ResponseTo, frame: req.frame, elapsed_us });
+    }
+
+    /// Remember an HCI command until its Command Complete / Status arrives.
+    pub fn push_command(&mut self, opcode: u16) {
+        let p = self.pending();
+        let q = self.pending_cmds.entry(opcode).or_default();
+        while q.len() >= MAX_PENDING_CMDS {
+            q.pop_front();
+        }
+        q.push_back(p);
+    }
+
+    /// Link the packet being decoded to the oldest unanswered command with `opcode`.
+    pub fn answer_command(&mut self, opcode: u16) {
+        if let Some(p) = self.pending_cmds.get_mut(&opcode).and_then(|q| q.pop_front()) {
+            self.link_to(p);
+        }
     }
 }
 

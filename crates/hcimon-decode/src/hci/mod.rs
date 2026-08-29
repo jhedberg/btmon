@@ -113,6 +113,7 @@ pub fn decode_command(ctx: &mut Context, pkt: &Packet) -> Decoded {
             let mut params = Reader::new(r.rest());
             let res = command::command_params(st, opcode, &mut params, &mut out);
             finish(res, &mut params, &mut out);
+            st.push_command(opcode);
         }
         _ => {
             d.summary = "malformed".into();

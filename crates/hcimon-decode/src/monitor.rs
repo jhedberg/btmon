@@ -24,6 +24,7 @@ impl Decoded {
             fields: Vec::new(),
             indent: 6,
             frame: 0,
+            links: Vec::new(),
         }
     }
 }
@@ -35,6 +36,8 @@ pub fn decode(ctx: &mut Context, pkt: &Packet) -> Decoded {
         let st = ctx.index_mut(pkt.index);
         st.frames += 1;
         st.last_ts = pkt.ts;
+        st.cur_ts = pkt.ts;
+        st.links.clear();
         st.frames
     } else {
         0
@@ -73,6 +76,9 @@ pub fn decode(ctx: &mut Context, pkt: &Packet) -> Decoded {
         }
     };
     d.frame = frame;
+    if pkt.index != INDEX_NONE {
+        d.links = std::mem::take(&mut ctx.index_mut(pkt.index).links);
+    }
     if pkt.opcode == Opcode::DelIndex {
         ctx.remove_index(pkt.index);
     }
@@ -166,4 +172,52 @@ fn user_logging(pkt: &Packet) -> Decoded {
         }
     }
     d
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::LinkKind;
+    use hcimon_capture::Timestamp;
+
+    fn pkt(opcode: Opcode, ts_us: i64, data: &[u8]) -> Packet {
+        Packet { ts: Some(Timestamp::Wall(ts_us)), index: 0, opcode, drops: 0, data: data.to_vec() }
+    }
+
+    #[test]
+    fn command_complete_links_to_command() {
+        let mut ctx = Context::new();
+        let cmd = decode(&mut ctx, &pkt(Opcode::Command, 1_000, &[0x03, 0x0c, 0x00]));
+        assert!(cmd.links.is_empty());
+        // An unrelated command in between.
+        decode(&mut ctx, &pkt(Opcode::Command, 1_500, &[0x01, 0x10, 0x00]));
+        let evt = decode(&mut ctx, &pkt(Opcode::Event, 3_500, &[0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00]));
+        assert_eq!(evt.links.len(), 1);
+        assert_eq!(evt.links[0].kind, LinkKind::ResponseTo);
+        assert_eq!(evt.links[0].frame, cmd.frame);
+        assert_eq!(evt.links[0].elapsed_us, Some(2_500));
+        // The second command is still pending; a Command Status answers it.
+        let st = decode(&mut ctx, &pkt(Opcode::Event, 4_000, &[0x0f, 0x04, 0x00, 0x01, 0x01, 0x10]));
+        assert_eq!(st.links[0].frame, 2);
+    }
+
+    #[test]
+    fn att_response_links_to_request() {
+        let mut ctx = Context::new();
+        // Exchange MTU Request (TX) on handle 0, then the Response (RX).
+        let req = decode(&mut ctx, &pkt(Opcode::AclTx, 10, &[0x00, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00]));
+        let rsp = decode(&mut ctx, &pkt(Opcode::AclRx, 2_010, &[0x00, 0x20, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x03, 0x40, 0x00]));
+        assert_eq!(rsp.links, vec![crate::Link { kind: LinkKind::ResponseTo, frame: req.frame, elapsed_us: Some(2_000) }]);
+    }
+
+    #[test]
+    fn l2cap_signaling_links_by_identifier() {
+        let mut ctx = Context::new();
+        // LE Connection Parameter Update Request ident 7 (RX), Response ident 7 (TX).
+        let req = decode(&mut ctx, &pkt(Opcode::AclRx, 0, &[0x00, 0x20, 0x0c, 0x00, 0x08, 0x00, 0x05, 0x00, 0x12, 0x07, 0x08, 0x00, 0x18, 0x00, 0x28, 0x00, 0x00, 0x00, 0x2a, 0x00]));
+        let rsp = decode(&mut ctx, &pkt(Opcode::AclTx, 500, &[0x00, 0x00, 0x06, 0x00, 0x02, 0x00, 0x05, 0x00, 0x13, 0x07, 0x02, 0x00, 0x00, 0x00]));
+        assert_eq!(rsp.links.len(), 1);
+        assert_eq!(rsp.links[0].frame, req.frame);
+        assert_eq!(rsp.links[0].elapsed_us, Some(500));
+    }
 }

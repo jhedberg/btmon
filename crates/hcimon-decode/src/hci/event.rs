@@ -106,6 +106,7 @@ pub fn event_params(st: &mut IndexState, code: u8, r: &mut Reader<'_>, out: &mut
 fn command_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let ncmd = r.u8()?;
     let opcode = r.u16()?;
+    st.answer_command(opcode);
     let (text, unknown) = opcode_text_for(st, opcode);
     if unknown {
         out.unknown(format!("{text} ncmd {ncmd}"));
@@ -120,10 +121,11 @@ fn command_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> R
     Ok(())
 }
 
-fn command_status(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+fn command_status(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let s = r.u8()?;
     let ncmd = r.u8()?;
     let opcode = r.u16()?;
+    st.answer_command(opcode);
     let (text, unknown) = opcode_text_for(st, opcode);
     if unknown {
         out.unknown(format!("{text} ncmd {ncmd}"));

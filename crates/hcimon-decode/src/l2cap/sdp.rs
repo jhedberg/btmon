@@ -6,6 +6,7 @@
 //! lists that do not parse as a complete data element are dumped as hex
 //! together with the continuation state.
 
+use crate::context::{IndexState, LinkType};
 use crate::field;
 use crate::reader::{Reader, Truncated};
 use crate::tree::Out;
@@ -76,13 +77,24 @@ impl From<Truncated> for Fail {
 type R<T> = std::result::Result<T, Fail>;
 
 /// Decode one SDP PDU.
-pub fn decode(payload: &[u8], out: &mut Out) {
+pub fn decode(st: &mut IndexState, handle: u16, rx: bool, payload: &[u8], out: &mut Out) {
     let mut r = Reader::new(payload);
     let (Ok(id), Ok(tid), Ok(plen)) = (r.u8(), r.u16_be(), r.u16_be()) else {
         out.error("SDP: header truncated");
         out.hex(payload);
         return;
     };
+    // Requests have even PDU ids, responses (and the error response) odd ones.
+    if id != 0 && id % 2 == 0 {
+        let p = st.pending();
+        let conn = st.conn_or_insert(handle, LinkType::Unknown);
+        if conn.l2cap.sdp_pending.len() > 64 {
+            conn.l2cap.sdp_pending.clear();
+        }
+        conn.l2cap.sdp_pending.insert((!rx, tid), p);
+    } else if let Some(req) = st.conn_mut(handle).and_then(|c| c.l2cap.sdp_pending.remove(&(rx, tid))) {
+        st.link_to(req);
+    }
     match pdu_name(id) {
         Some(n) => field!(out, "SDP: {} (0x{:02x}) tid {} len {}", n, id, tid, plen),
         None => out.unknown(format!("SDP: Unknown (0x{id:02x}) tid {tid} len {plen}")),
@@ -463,7 +475,8 @@ mod tests {
 
     fn run(payload: &[u8]) -> Vec<String> {
         let mut out = Out::new();
-        decode(payload, &mut out);
+        let mut st = IndexState::default();
+        decode(&mut st, 0x0040, false, payload, &mut out);
         test_lines(&out)
     }
 

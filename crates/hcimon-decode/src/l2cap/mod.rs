@@ -470,7 +470,7 @@ fn dispatch_psm(st: &mut IndexState, handle: u16, rx: bool, psm: u16, payload: &
     match psm {
         PSM_SDP => {
             layers.push(Layer::Sdp);
-            sdp::decode(payload, out);
+            sdp::decode(st, handle, rx, payload, out);
         }
         PSM_RFCOMM => {
             layers.push(Layer::Rfcomm);

@@ -23,7 +23,8 @@
 //! Packet-level fields: `frame` (session sequence number), `kind`
 //! (command, event, acl, sco, iso, index, log, control, vendor),
 //! `dir` (tx, rx), `index` (controller index), `source`, `opcode`, `event`,
-//! `subevent`, `len`, `drops`, `ident` and `prio` (user logging), `text`
+//! `subevent`, `len`, `drops`, `ident` and `prio` (user logging), `response_to`
+//! and `rtt` (milliseconds, on packets that answer a request), `text`
 //! (headline and every field), `headline`, and `error` (the packet has a
 //! decoding problem).  Layer names (`hci`, `l2cap`, `att`, `smp`, `sdp`,
 //! `rfcomm`, `avdtp`, `avctp`, `mgmt`, `log`) are true when present.
@@ -218,6 +219,15 @@ impl FieldIndex {
                 ix.push("message", FieldValue::from_text(&d.summary));
             }
             _ => {}
+        }
+        for l in &d.links {
+            if l.kind == crate::LinkKind::ResponseTo {
+                ix.push("response_to", FieldValue::from_number(l.frame));
+                if let Some(us) = l.elapsed_us {
+                    let ms = us as f64 / 1000.0;
+                    ix.push("rtt", FieldValue { text: format!("{ms:.3} ms"), name: format!("{ms:.3}"), num: Some(ms), raw: None });
+                }
+            }
         }
         for l in &d.layers {
             ix.flags.push(layer_key(*l));
