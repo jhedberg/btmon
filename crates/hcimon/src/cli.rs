@@ -128,7 +128,7 @@ pub struct Cli {
     pub mcp: bool,
 
     /// Keep at most this many packets in memory in the interactive UI
-    #[arg(long = "max-packets", value_name = "N", default_value_t = 200_000)]
+    #[arg(long = "max-packets", value_name = "N", default_value_t = 100_000)]
     pub max_packets: usize,
 
     /// List serial ports and debug probes that can be used as sources, then exit
