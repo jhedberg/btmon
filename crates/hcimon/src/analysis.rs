@@ -12,6 +12,8 @@ use std::fmt::Write as _;
 use anyhow::{bail, Result};
 use hcimon_capture::INDEX_NONE;
 use hcimon_decode::{decode, expert, Context, FieldIndex, LinkKind, PacketMeta, Query, Timestamp};
+#[cfg(test)]
+use hcimon_decode::Node;
 
 use crate::conversations;
 use crate::output::machine;
@@ -198,8 +200,8 @@ impl Loaded {
             for (k, v) in e.index.fields() {
                 let ent = map.entry(k.to_string()).or_default();
                 ent.0 += 1;
-                if ent.1.len() < 3 && !ent.1.contains(&v.text) {
-                    ent.1.push(v.text.clone());
+                if ent.1.len() < 3 && !ent.1.iter().any(|t| t == v.text()) {
+                    ent.1.push(v.text().to_string());
                 }
             }
         }
@@ -316,5 +318,50 @@ mod tests {
         assert!(l.summary().contains("Packets: 143"));
         assert!(l.conversations().contains("handle 0"));
         assert!(field_dictionary(Some(&l)).contains("handle"));
+    }
+}
+
+#[cfg(test)]
+mod memory_profile {
+    //! Not a test of behaviour: `cargo test -p hcimon memory_profile -- --ignored --nocapture`
+    //! prints where the bytes of a loaded capture go, to guide optimisation.
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn where_the_bytes_go() {
+        let l = Loaded::from_file("../../testdata/xg24_peripheral_hr.tty").unwrap();
+        let n = l.entries.len();
+        let (mut tree_text, mut tree_nodes, mut idx_text, mut idx_fields, mut idx_field_text, mut data, mut headline) = (0, 0, 0, 0, 0, 0, 0);
+        for e in &l.entries {
+            for f in &e.decoded.fields {
+                f.walk(0, &mut |_, node| {
+                    tree_nodes += 1;
+                    tree_text += node.text.capacity();
+                });
+            }
+            idx_text += e.index.text().len();
+            idx_fields += e.index.fields().len();
+            idx_field_text += e.index.fields().iter().map(|(_, v)| v.text().len()).sum::<usize>();
+            data += e.packet.data.capacity();
+            headline += e.decoded.label.capacity() + e.decoded.summary.capacity() + e.decoded.extra.capacity();
+        }
+        let node_overhead = tree_nodes * std::mem::size_of::<Node>();
+        let field_overhead = idx_fields * std::mem::size_of::<(&'static str, hcimon_decode::query::FieldValue)>();
+        let entry_overhead = n * std::mem::size_of::<Entry>();
+        let total = tree_text + node_overhead + idx_text + idx_field_text + field_overhead + data + headline + entry_overhead;
+        println!("packets {n}: avg {} B/packet (accounted)", total / n);
+        for (k, v) in [
+            ("tree node text", tree_text),
+            ("tree Node structs", node_overhead),
+            ("index text copy", idx_text),
+            ("index field text", idx_field_text),
+            ("index field structs", field_overhead),
+            ("raw packet data", data),
+            ("headline strings", headline),
+            ("Entry structs", entry_overhead),
+        ] {
+            println!("  {k:<22} {:>8} B  {:>5.1}%", v, v as f64 * 100.0 / total as f64);
+        }
     }
 }

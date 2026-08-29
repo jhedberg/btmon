@@ -174,7 +174,7 @@ pub fn write_jsonl(w: &mut impl Write, e: &Entry, first_ts: Option<Timestamp>, s
         if i > 0 {
             o.push(',');
         }
-        let vals: Vec<String> = e.index.get(k).map(|v| json_str(&v.text)).collect();
+        let vals: Vec<String> = e.index.get(k).map(|v| json_str(v.text())).collect();
         let _ = write!(o, "{}:[{}]", json_str(k), vals.join(","));
     }
     o.push('}');

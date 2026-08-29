@@ -33,8 +33,8 @@ pub fn handles_of(e: &Entry) -> Vec<u16> {
     let mut v: Vec<u16> = e
         .index
         .get("handle")
-        .filter(|f| !f.text.starts_with("0x"))
-        .filter_map(|f| f.num.map(|n| n as u64))
+        .filter(|f| !f.text().starts_with("0x"))
+        .filter_map(|f| f.num().map(|n| n as u64))
         .filter(|&h| h <= 0x0eff)
         .map(|h| h as u16)
         .collect();
@@ -83,7 +83,7 @@ pub fn collect(entries: &[Entry]) -> Vec<Conversation> {
             }
             if single && c.peer.is_empty() {
                 if let Some(a) = e.index.get("peer_address").chain(e.index.get("address")).next() {
-                    c.peer = a.text.clone();
+                    c.peer = a.text().to_string();
                 }
             }
         }

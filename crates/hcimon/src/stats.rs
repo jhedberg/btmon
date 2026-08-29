@@ -88,7 +88,7 @@ pub fn collect(entries: &[Entry], buckets: usize) -> Stats {
         }
         if let Some(v) = e.index.get("att").next() {
             // `Read By Type Request (0x08) len 6` → the PDU name.
-            let name = v.text.split(" (").next().unwrap_or(&v.text).to_string();
+            let name = v.text().split(" (").next().unwrap_or(v.text()).to_string();
             *atts.entry(name).or_insert(0) += 1;
         }
         for l in &e.decoded.layers {

@@ -72,31 +72,31 @@ pub fn assess(d: &Decoded, pkt: &Packet, ix: &FieldIndex) -> Vec<Finding> {
 
     // Non-success HCI status codes.
     for s in ix.get("status") {
-        if s.raw.is_some_and(|r| r != 0) {
-            add(Severity::Warning, format!("{}: Status {}", d.summary, s.text));
+        if s.raw().is_some_and(|r| r != 0) {
+            add(Severity::Warning, format!("{}: Status {}", d.summary, s.text()));
         }
     }
     if d.summary.starts_with("Hardware Error") {
         add(Severity::Error, "Hardware Error event".into());
     }
     if d.summary.starts_with("Disconnection Complete") {
-        let reason = ix.get("reason").next().map(|r| r.text.clone()).unwrap_or_default();
-        let handle = ix.get("handle").next().map(|h| h.text.clone()).unwrap_or_default();
+        let reason = ix.get("reason").next().map(|r| r.text().to_string()).unwrap_or_default();
+        let handle = ix.get("handle").next().map(|h| h.text().to_string()).unwrap_or_default();
         add(Severity::Note, format!("Disconnected: handle {handle}, reason {reason}"));
     }
     // ATT Error Response and SMP Pairing Failed print `Error:` / `Reason:` fields.
     if let Some(e) = ix.get("error").next() {
-        add(Severity::Warning, format!("ATT error: {}", e.text));
+        add(Severity::Warning, format!("ATT error: {}", e.text()));
     }
     if ix.text().contains("SMP: Pairing Failed") {
-        let reason = ix.get("reason").next().map(|r| r.text.clone()).unwrap_or_default();
+        let reason = ix.get("reason").next().map(|r| r.text().to_string()).unwrap_or_default();
         add(Severity::Error, format!("Pairing failed: {reason}"));
     }
     // L2CAP results other than success/pending, and command rejects.
     for r in ix.get("result") {
         let name = r.name().to_ascii_lowercase();
         if !(name.contains("success") || name.contains("pending") || name.contains("accept") || name.starts_with("all connections")) {
-            add(Severity::Warning, format!("L2CAP: {}", r.text));
+            add(Severity::Warning, format!("L2CAP: {}", r.text()));
         }
     }
     if ix.text().contains("Command Reject") {

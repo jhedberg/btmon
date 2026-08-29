@@ -41,23 +41,44 @@ use crate::{Decoded, Layer};
 // Field index
 
 /// A value extracted from a decoded line.
+///
+/// Kept small on purpose (there are a dozen per packet): the text is a boxed
+/// str and the numbers use sentinels instead of `Option`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldValue {
-    /// The text after the label.
-    pub text: String,
-    /// The first number in the text (decimal, hex or with a fraction).
-    pub num: Option<f64>,
-    /// The raw value given in parentheses, `Name (0x0018)` → 0x18.
-    pub raw: Option<u64>,
+    text: Box<str>,
+    num: f64,
+    raw: u64,
 }
 
+const NO_RAW: u64 = u64::MAX;
+
 impl FieldValue {
+    /// The text after the label.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// The first number in the text (decimal, hex or with a fraction).
+    pub fn num(&self) -> Option<f64> {
+        (!self.num.is_nan()).then_some(self.num)
+    }
+
+    /// The raw value given in parentheses, `Name (0x0018)` → 0x18.
+    pub fn raw(&self) -> Option<u64> {
+        (self.raw != NO_RAW).then_some(self.raw)
+    }
+
     /// The name part of `Name (0x..)` style values, otherwise the whole text.
     pub fn name(&self) -> &str {
         match self.text.find(" (") {
             Some(i) if self.text.ends_with(')') => &self.text[..i],
             _ => &self.text,
         }
+    }
+
+    fn make(text: String, num: Option<f64>, raw: Option<u64>) -> Self {
+        FieldValue { text: text.into_boxed_str(), num: num.unwrap_or(f64::NAN), raw: raw.unwrap_or(NO_RAW) }
     }
 
     pub fn parse(text: &str) -> Self {
@@ -72,16 +93,17 @@ impl FieldValue {
             }
         });
         let num = first_number(&text);
-        FieldValue { text, num, raw }
+        FieldValue::make(text, num, raw)
     }
 
     pub fn from_number(n: u64) -> Self {
-        FieldValue { text: n.to_string(), num: Some(n as f64), raw: Some(n) }
+        FieldValue::make(n.to_string(), Some(n as f64), Some(n))
     }
 
     pub fn from_text(s: impl Into<String>) -> Self {
         let text = s.into();
-        FieldValue { num: first_number(&text), raw: None, text }
+        let num = first_number(&text);
+        FieldValue::make(text, num, None)
     }
 }
 
@@ -254,7 +276,7 @@ impl FieldIndex {
             ix.push(key_frame, FieldValue::from_number(l.frame));
             if let Some(us) = l.elapsed_us {
                 let ms = us as f64 / 1000.0;
-                ix.push(key_ms, FieldValue { text: format!("{ms:.3} ms"), num: Some(ms), raw: None });
+                ix.push(key_ms, FieldValue::make(format!("{ms:.3} ms"), Some(ms), None));
             }
         }
         for l in &d.layers {
@@ -440,6 +462,7 @@ fn eval(e: &Expr, ix: &FieldIndex) -> bool {
             for v in ix.get(k) {
                 any = true;
                 let eq = value_eq(v, lit);
+                let (vnum, vraw) = (v.num(), v.raw());
                 if eq {
                     all_ne = false;
                 }
@@ -447,12 +470,12 @@ fn eval(e: &Expr, ix: &FieldIndex) -> bool {
                     Op::Eq => eq,
                     Op::Ne => false,
                     Op::Contains => match lit {
-                        Literal::Text(t) => contains_ci(&v.text, t),
-                        Literal::Number(n) => v.num == Some(*n) || v.raw.map(|r| r as f64) == Some(*n),
+                        Literal::Text(t) => contains_ci(v.text(), t),
+                        Literal::Number(n) => vnum == Some(*n) || vraw.map(|r| r as f64) == Some(*n),
                     },
                     Op::Lt | Op::Le | Op::Gt | Op::Ge => {
                         let Literal::Number(n) = lit else { return false };
-                        let Some(x) = v.num.or(v.raw.map(|r| r as f64)) else { continue };
+                        let Some(x) = vnum.or(vraw.map(|r| r as f64)) else { continue };
                         match op {
                             Op::Lt => x < *n,
                             Op::Le => x <= *n,
@@ -488,12 +511,12 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
 
 fn value_eq(v: &FieldValue, lit: &Literal) -> bool {
     match lit {
-        Literal::Number(n) => v.raw.map(|r| r as f64) == Some(*n) || v.num == Some(*n),
+        Literal::Number(n) => v.raw().map(|r| r as f64) == Some(*n) || v.num() == Some(*n),
         Literal::Text(t) => {
             v.name().eq_ignore_ascii_case(t)
-                || v.text.eq_ignore_ascii_case(t)
+                || v.text().eq_ignore_ascii_case(t)
                 // Addresses may carry a suffix: `4B:65:27:2E:1D:6E (Resolvable)`.
-                || (looks_like_address(t) && v.text.to_ascii_uppercase().starts_with(&t.to_ascii_uppercase()))
+                || (looks_like_address(t) && v.text().to_ascii_uppercase().starts_with(&t.to_ascii_uppercase()))
         }
     }
 }
@@ -767,14 +790,15 @@ mod tests {
     fn values() {
         let v = FieldValue::parse("Success (0x00)");
         assert_eq!(v.name(), "Success");
-        assert_eq!(v.raw, Some(0));
+        assert_eq!(v.raw(), Some(0));
         let v = FieldValue::parse("30.000 msec (0x0018)");
-        assert_eq!(v.num, Some(30.0));
-        assert_eq!(v.raw, Some(0x18));
+        assert_eq!(v.num(), Some(30.0));
+        assert_eq!(v.raw(), Some(0x18));
         let v = FieldValue::parse("-45 dBm (0xd3)");
-        assert_eq!(v.num, Some(-45.0));
+        assert_eq!(v.num(), Some(-45.0));
         let v = FieldValue::parse("4B:65:27:2E:1D:6E (Resolvable)");
-        assert_eq!(v.num, None);
+        assert_eq!(v.num(), None);
+        assert_eq!(std::mem::size_of::<FieldValue>(), 32);
         assert_eq!(normalize_key("Peer address type"), "peer_address_type");
         assert_eq!(normalize_key("16-bit Service UUIDs (complete)"), "16_bit_service_uuids_complete");
     }
