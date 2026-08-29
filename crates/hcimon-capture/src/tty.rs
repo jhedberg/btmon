@@ -273,13 +273,15 @@ fn payload_consistent(opcode: u16, p: &[u8]) -> bool {
 fn parse_ext(mut ext: &[u8]) -> Option<(Drops, Option<u32>)> {
     let mut drops = Drops::default();
     let mut ts32 = None;
-    let mut last_type = 0u8;
+    // Entries may come in any order (Zephyr sends the timestamp first, drop
+    // counters after it), but a type must not repeat.
+    let mut seen = 0u16;
     while !ext.is_empty() {
         let t = ext[0];
-        if t <= last_type {
+        if t == 0 || t > 15 || seen & (1 << t) != 0 {
             return None;
         }
-        last_type = t;
+        seen |= 1 << t;
         match t {
             EXTHDR_COMMAND_DROPS..=EXTHDR_OTHER_DROPS => {
                 let v = *ext.get(1)?;
@@ -378,6 +380,25 @@ mod tests {
         let boot = ops.windows(3).position(|w| w == [Opcode::NewIndex, Opcode::OpenIndex, Opcode::Command]);
         assert!(boot.is_some(), "boot sequence not recovered: {:?}", &ops[100..160.min(ops.len())]);
         assert!(!ops.contains(&Opcode::SystemNote), "garbage accepted as a System Note");
+        // Frames that report drops (timestamp first, drop counter after) must not be lost.
+        assert!(ops.len() >= 760, "only {} frames", ops.len());
+        // Skipped: the cut frame at capture start, one header cut short early on
+        // and the reset: 119 bytes in four gaps.
+        assert!(f.skipped <= 119 && f.resyncs <= 4, "{} bytes skipped in {} gaps", f.skipped, f.resyncs);
+    }
+
+    #[test]
+    fn extended_header_entries_in_any_order() {
+        // Zephyr: timestamp, then drop counters.
+        let (drops, ts) = parse_ext(&[8, 0x10, 0x27, 0, 0, 7, 1, 2, 3]).unwrap();
+        assert_eq!(ts, Some(10_000));
+        assert_eq!((drops.other, drops.event), (1, 3));
+        // Ascending order works too.
+        let (drops, ts) = parse_ext(&[1, 5, 8, 1, 0, 0, 0]).unwrap();
+        assert_eq!((drops.command, ts), (5, Some(1)));
+        // A repeated entry or an unknown type is malformed.
+        assert!(parse_ext(&[8, 1, 0, 0, 0, 8, 2, 0, 0, 0]).is_none());
+        assert!(parse_ext(&[9, 1]).is_none());
     }
 
     #[test]
