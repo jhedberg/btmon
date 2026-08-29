@@ -250,11 +250,16 @@ impl FieldIndex {
         }
         let Some(i) = node.text.find(": ") else { return };
         let label = &node.text[..i];
-        if label.is_empty() || label.len() > 48 || label.chars().any(|c| c == '(' || c == ')') {
+        if label.is_empty() || label.len() > 48 {
             return;
         }
         let value = &node.text[i + 2..];
-        self.push_owned(normalize_key(label), FieldValue::parse(value));
+        let v = FieldValue::parse(value);
+        // `Name (complete): X` is reachable as both `name_complete` and `name`.
+        if let Some(j) = label.find(" (") {
+            self.push_owned(normalize_key(&label[..j]), v.clone());
+        }
+        self.push_owned(normalize_key(label), v);
         // `Handle: 3 Address: XX:..` carries a second field.
         if let Some(j) = value.find(" Address: ") {
             self.push_owned("address".into(), FieldValue::parse(&value[j + 10..]));
@@ -524,29 +529,30 @@ fn tokenize(src: &str) -> Result<Vec<Token>, ParseError> {
             continue;
         }
         let pos = i;
-        let two = if i + 1 < b.len() { &src[i..i + 2] } else { "" };
+        // Two-byte operators are ASCII; compare bytes so non-ASCII input cannot split a char.
+        let two: &[u8] = if i + 1 < b.len() { &b[i..i + 2] } else { b"" };
         let tok = match two {
-            "&&" => {
+            b"&&" => {
                 i += 2;
                 Tok::And
             }
-            "||" => {
+            b"||" => {
                 i += 2;
                 Tok::Or
             }
-            "==" => {
+            b"==" => {
                 i += 2;
                 Tok::Op(Op::Eq)
             }
-            "!=" => {
+            b"!=" => {
                 i += 2;
                 Tok::Op(Op::Ne)
             }
-            "<=" => {
+            b"<=" => {
                 i += 2;
                 Tok::Op(Op::Le)
             }
-            ">=" => {
+            b">=" => {
                 i += 2;
                 Tok::Op(Op::Ge)
             }
@@ -785,6 +791,24 @@ mod tests {
         assert!(!q("rssi").matches(&ix));
         assert!(!q("rssi < -70").matches(&ix));
         assert!(q("index == 0 && source == test && len == 6").matches(&ix));
+    }
+
+    #[test]
+    fn non_ascii_input_does_not_panic() {
+        assert!(Query::parse("name contains \"Zéphyr ✓\"").is_ok());
+        assert!(Query::parse("näme == ✓").is_ok());
+        assert!(Query::parse("✓✓ && (").is_err());
+    }
+
+    #[test]
+    fn parenthesised_labels_get_short_aliases() {
+        // LE Set Advertising Data with a Complete Local Name "Zephyr".
+        let mut data = vec![0x08, 0x20, 32, 8, 0x07, 0x09, b'Z', b'e', b'p', b'h', b'y', b'r'];
+        data.resize(35, 0);
+        let pkt = Packet::new(Opcode::Command, 0, data);
+        let ix = index(&pkt);
+        assert!(q("name contains zephyr").matches(&ix));
+        assert!(q("name_complete == Zephyr").matches(&ix));
     }
 
     #[test]

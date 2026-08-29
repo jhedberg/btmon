@@ -93,15 +93,18 @@ mod names {
     use crate::context::IndexState;
     use crate::tree::Node;
 
-    fn parse_addr(s: &str) -> Option<BdAddr> {
-        let b = s.as_bytes();
+    /// Parse `XX:XX:XX:XX:XX:XX` from the first 17 bytes; works on bytes so
+    /// that non-ASCII text around the address cannot cause a slicing panic.
+    fn parse_addr(b: &[u8]) -> Option<BdAddr> {
         if b.len() < 17 {
             return None;
         }
+        let hex = |c: u8| (c as char).to_digit(16).map(|d| d as u8);
         let mut out = [0u8; 6];
         for i in 0..6 {
-            let chunk = &s[i * 3..i * 3 + 2];
-            out[5 - i] = u8::from_str_radix(chunk, 16).ok()?;
+            let hi = hex(b[i * 3])?;
+            let lo = hex(b[i * 3 + 1])?;
+            out[5 - i] = (hi << 4) | lo;
             if i < 5 && b[i * 3 + 2] != b':' {
                 return None;
             }
@@ -109,13 +112,14 @@ mod names {
         Some(BdAddr(out))
     }
 
-    /// Address found in a `... : XX:XX:XX:XX:XX:XX ...` line, with the offset just past it.
+    /// Address found in a `... : XX:XX:XX:XX:XX:XX ...` line, with the byte offset
+    /// just past it (always a char boundary, since the address is ASCII).
     fn find_addr(text: &str) -> Option<(BdAddr, usize)> {
         let b = text.as_bytes();
         let mut i = 0;
         while i + 17 <= b.len() {
             if b[i].is_ascii_hexdigit() && (i == 0 || !b[i - 1].is_ascii_hexdigit()) {
-                if let Some(a) = parse_addr(&text[i..i + 17]) {
+                if let Some(a) = parse_addr(&b[i..i + 17]) {
                     if i + 17 == b.len() || !b[i + 17].is_ascii_hexdigit() {
                         return Some((a, i + 17));
                     }
@@ -353,5 +357,88 @@ mod tests {
         assert_eq!(rsp.links.len(), 1);
         assert_eq!(rsp.links[0].frame, req.frame);
         assert_eq!(rsp.links[0].elapsed_us, Some(500));
+    }
+}
+
+#[cfg(test)]
+mod fuzz {
+    //! Mutation fuzzing of the whole decode pipeline over the sample capture:
+    //! every packet truncated at every length and with every byte flipped,
+    //! decoded through a shared context (so state-dependent paths run too),
+    //! then indexed and assessed.  Nothing may panic.
+    use super::*;
+    use crate::expert;
+    use crate::query::{FieldIndex, PacketMeta};
+    use hcimon_capture::tty::Framer;
+
+    fn sample() -> Vec<Packet> {
+        let mut f = Framer::new();
+        f.push(include_bytes!("../../../testdata/xg24_peripheral_hr.tty"));
+        let mut v = Vec::new();
+        while let Some(fr) = f.next_frame() {
+            v.push(fr.packet);
+        }
+        v
+    }
+
+    fn run(ctx: &mut Context, pkt: &Packet) {
+        let d = decode(ctx, pkt);
+        let ix = FieldIndex::build(&d, pkt, PacketMeta { seq: 1, source: "fuzz" });
+        let _ = expert::assess(&d, pkt, &ix);
+        let _ = d.lines();
+    }
+
+    #[test]
+    fn mutated_packets_never_panic() {
+        let packets = sample();
+        assert!(packets.len() > 100);
+        let mut ctx = Context::new();
+        let mut decodes = 0usize;
+        for p in &packets {
+            // Truncations.
+            for len in 0..p.data.len() {
+                let mut m = p.clone();
+                m.data.truncate(len);
+                run(&mut ctx, &m);
+                decodes += 1;
+            }
+            // Byte flips: zero, all-ones, and a bit flip at every position.
+            for i in 0..p.data.len() {
+                for v in [0x00u8, 0xff, p.data[i] ^ 0x01, p.data[i] ^ 0x80] {
+                    let mut m = p.clone();
+                    m.data[i] = v;
+                    run(&mut ctx, &m);
+                    decodes += 1;
+                }
+            }
+            // Extra trailing bytes.
+            let mut m = p.clone();
+            m.data.extend_from_slice(&[0xaa, 0x55, 0x00, 0xff]);
+            run(&mut ctx, &m);
+            run(&mut ctx, p);
+            decodes += 2;
+        }
+        assert!(decodes > 10_000, "{decodes}");
+    }
+
+    #[test]
+    fn random_payloads_never_panic() {
+        // A simple LCG so the test is deterministic and dependency-free.
+        let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+        let mut next = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        let mut ctx = Context::new();
+        for i in 0..20_000u32 {
+            let opcode = Opcode::from_u16((next() % 22) as u16);
+            let len = (next() % 64) as usize;
+            let data: Vec<u8> = (0..len).map(|_| next() as u8).collect();
+            let mut pkt = Packet::new(opcode, (i % 3) as u16, data);
+            pkt.ts = Some(hcimon_capture::Timestamp::Wall(i as i64 * 1000));
+            run(&mut ctx, &pkt);
+        }
     }
 }
