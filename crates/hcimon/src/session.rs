@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use hcimon_decode::{decode, Context as DecodeContext, Decoded, Options, Packet, Timestamp};
+use hcimon_decode::{decode, Context as DecodeContext, Decoded, FieldIndex, Options, Packet, PacketMeta, Query, Timestamp};
 use hcimon_capture::btsnoop;
 use crossbeam_channel::{unbounded, Receiver, RecvTimeoutError};
 
@@ -29,6 +29,8 @@ pub struct SessionConfig {
     pub max_packets: usize,
     pub color: bool,
     pub columns: usize,
+    /// Display filter applied in plain mode (the UI keeps its own).
+    pub filter: Option<Query>,
 }
 
 /// A captured packet together with its decoding.
@@ -39,6 +41,8 @@ pub struct Entry {
     pub source: SourceId,
     pub packet: Packet,
     pub decoded: Decoded,
+    /// Typed fields for filter expressions.
+    pub index: FieldIndex,
 }
 
 pub struct Session {
@@ -157,7 +161,9 @@ impl Session {
         }
         let seq = self.next_seq;
         self.next_seq += 1;
-        Some(Entry { seq, source, packet, decoded })
+        let label = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
+        let index = FieldIndex::build(&decoded, &packet, PacketMeta { seq, source: &label });
+        Some(Entry { seq, source, packet, decoded, index })
     }
 
     pub fn flush_writer(&mut self) {
@@ -183,6 +189,10 @@ impl Session {
             match self.next_event(Duration::from_millis(200)) {
                 Some(Event::Packet { source, packet }) => {
                     if let Some(entry) = self.ingest(source, packet) {
+                        printer.set_origin(self.first_ts);
+                        if self.config.filter.as_ref().is_some_and(|q| !q.matches(&entry.index)) {
+                            continue;
+                        }
                         let label = self.source_label(source);
                         printer.print(&entry.packet, &entry.decoded, label.as_deref())?;
                     }
@@ -197,7 +207,7 @@ impl Session {
                 Some(Event::Error { source, message }) => {
                     let label = self.source_label(source).unwrap_or_default();
                     printer.flush()?;
-                    eprintln!("btmon: {label}{}{message}", if label.is_empty() { "" } else { ": " });
+                    eprintln!("hcimon: {label}{}{message}", if label.is_empty() { "" } else { ": " });
                 }
                 Some(Event::Eof { .. }) => {}
                 None => {}

@@ -104,6 +104,10 @@ pub struct Cli {
     #[arg(short = 'V', long = "vendor", value_name = "ID")]
     pub vendor: Option<u16>,
 
+    /// Display filter expression, e.g. 'att && handle == 0x1c' or 'status != Success'
+    #[arg(short = 'Y', long = "filter", value_name = "EXPR")]
+    pub filter: Option<String>,
+
     /// Keep at most this many packets in memory in the interactive UI
     #[arg(long = "max-packets", value_name = "N", default_value_t = 200_000)]
     pub max_packets: usize,
@@ -129,6 +133,7 @@ Examples:
   hcimon --tty /dev/serial/by-id/usb-SEGGER_J-Link_000682451005-if00
   hcimon --rtt nRF52832_xxAA --probe 682451005
   hcimon -r capture.snoop -p
+  hcimon -r capture.snoop -p -Y 'att && handle == 0x1c'
   hcimon --tty /dev/ttyACM0 -w capture.snoop
 
 Sources can also be added interactively in the UI (press 'a').";

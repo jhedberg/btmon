@@ -1,6 +1,6 @@
 //! Display filters for the packet list.
 
-use hcimon_decode::{Layer, Opcode};
+use hcimon_decode::{Layer, Opcode, Query};
 
 use crate::session::Entry;
 use crate::source::SourceId;
@@ -92,6 +92,8 @@ pub struct Filter {
     pub text: String,
     /// Maximum user-logging priority (0..7) to show.
     pub max_priority: Option<u8>,
+    /// Display filter expression.
+    pub expr: Option<Query>,
 }
 
 impl Default for Filter {
@@ -103,6 +105,7 @@ impl Default for Filter {
             source: None,
             text: String::new(),
             max_priority: None,
+            expr: None,
         }
     }
 }
@@ -115,6 +118,7 @@ impl Filter {
             || self.source.is_some()
             || !self.text.is_empty()
             || self.max_priority.is_some()
+            || self.expr.is_some()
     }
 
     pub fn has_category(&self, c: Category) -> bool {
@@ -162,6 +166,11 @@ impl Filter {
         if !self.text.is_empty() && !text_matches(e, &self.text) {
             return false;
         }
+        if let Some(q) = &self.expr {
+            if !q.matches(&e.index) {
+                return false;
+            }
+        }
         true
     }
 
@@ -188,26 +197,14 @@ impl Filter {
         if !self.text.is_empty() {
             parts.push(format!("\"{}\"", self.text));
         }
+        if let Some(q) = &self.expr {
+            parts.push(q.source().to_string());
+        }
         parts.join(" ")
     }
 }
 
 /// Case-insensitive substring match over the headline and all field lines.
 pub fn text_matches(e: &Entry, needle: &str) -> bool {
-    let needle = needle.to_lowercase();
-    if e.decoded.headline().to_lowercase().contains(&needle) {
-        return true;
-    }
-    let mut found = false;
-    for n in &e.decoded.fields {
-        n.walk(0, &mut |_, node| {
-            if !found && node.text.to_lowercase().contains(&needle) {
-                found = true;
-            }
-        });
-        if found {
-            break;
-        }
-    }
-    found
+    e.index.text().to_lowercase().contains(&needle.to_lowercase())
 }

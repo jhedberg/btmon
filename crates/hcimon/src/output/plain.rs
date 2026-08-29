@@ -99,6 +99,13 @@ impl<W: Write> Printer<W> {
         Printer { out, palette: Palette { enabled: color }, columns: columns.max(40), time_mode, show_index: true, first_ts: None }
     }
 
+    /// Set the timestamp that offsets are relative to (the first captured packet).
+    pub fn set_origin(&mut self, ts: Option<Timestamp>) {
+        if self.first_ts.is_none() {
+            self.first_ts = ts;
+        }
+    }
+
     /// Print a decoded packet.
     pub fn print(&mut self, pkt: &Packet, d: &Decoded, source_label: Option<&str>) -> io::Result<()> {
         if self.first_ts.is_none() {

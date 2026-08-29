@@ -72,6 +72,7 @@ pub enum Popup {
     AddSource(AddSource),
     Write(TextInput),
     Search(TextInput),
+    Expr(TextInput),
     Message { title: String, text: String },
 }
 
@@ -540,6 +541,10 @@ impl App {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('?') | KeyCode::F(1) => self.popup = Some(Popup::Help),
             KeyCode::Char('/') => self.popup = Some(Popup::Search(TextInput::new(self.search.clone()))),
+            KeyCode::Char('e') | KeyCode::Char(':') => {
+                let current = self.filter.expr.as_ref().map(|q| q.source().to_string()).unwrap_or_default();
+                self.popup = Some(Popup::Expr(TextInput::new(current)));
+            }
             KeyCode::Char('n') => self.find_next(true),
             KeyCode::Char('N') => self.find_next(false),
             KeyCode::Char('f') => self.popup = Some(Popup::Filter { cursor: 0 }),
@@ -655,6 +660,32 @@ impl App {
                 _ => {
                     input.handle(key);
                     self.popup = Some(Popup::Search(input));
+                }
+            },
+            Popup::Expr(mut input) => match key.code {
+                KeyCode::Esc => {}
+                KeyCode::Enter => {
+                    let text = input.value.trim().to_string();
+                    if text.is_empty() {
+                        self.filter.expr = None;
+                        self.rebuild_visible();
+                    } else {
+                        match hcimon_decode::Query::parse(&text) {
+                            Ok(q) => {
+                                self.filter.expr = Some(q);
+                                self.rebuild_visible();
+                                self.set_message(format!("filter: {text} ({} of {} shown)", self.visible.len(), self.entries.len()), false);
+                            }
+                            Err(e) => {
+                                self.set_message(format!("filter error: {e}"), true);
+                                self.popup = Some(Popup::Expr(input));
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    input.handle(key);
+                    self.popup = Some(Popup::Expr(input));
                 }
             },
             Popup::Write(mut input) => match key.code {

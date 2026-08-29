@@ -24,7 +24,11 @@ fn main() -> ExitCode {
     match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            let _ = writeln!(io::stderr(), "btmon: {e:#}");
+            // A closed pipe (`hcimon ... | head`) is not an error worth reporting.
+            if e.downcast_ref::<io::Error>().map(|e| e.kind() == io::ErrorKind::BrokenPipe).unwrap_or(false) {
+                return ExitCode::SUCCESS;
+            }
+            let _ = writeln!(io::stderr(), "hcimon: {e:#}");
             ExitCode::FAILURE
         }
     }
@@ -79,6 +83,10 @@ fn run(cli: Cli) -> Result<()> {
         Color::Auto => stdout_tty && std::env::var_os("NO_COLOR").is_none(),
     };
     let columns = cli.columns.or_else(|| terminal::size().ok().map(|(w, _)| w as usize)).unwrap_or(80);
+    let filter = match &cli.filter {
+        Some(f) => Some(hcimon_decode::Query::parse(f).map_err(|e| anyhow::anyhow!("invalid filter expression: {e}"))?),
+        None => None,
+    };
 
     let config = SessionConfig {
         write: cli.write.clone(),
@@ -91,6 +99,7 @@ fn run(cli: Cli) -> Result<()> {
         max_packets: cli.max_packets,
         color,
         columns,
+        filter,
     };
 
     let mut session = Session::new(config)?;
@@ -104,7 +113,7 @@ fn run(cli: Cli) -> Result<()> {
         anyhow::bail!("{}", errors.join("\n"));
     }
     for e in &errors {
-        eprintln!("btmon: {e}");
+        eprintln!("hcimon: {e}");
     }
 
     if interactive {

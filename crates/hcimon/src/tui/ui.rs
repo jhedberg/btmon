@@ -314,6 +314,7 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
                 ("q", "quit"),
                 ("?", "help"),
                 ("/", "search"),
+                ("e", "expr"),
                 ("f", "filter"),
                 ("a", "add source"),
                 ("s", "sources"),
@@ -360,6 +361,7 @@ fn draw_popup(frame: &mut Frame, app: &App, popup: &Popup, area: Rect) {
         }
         Popup::Search(input) => draw_input(frame, area, " Search (Enter: find next · Tab: apply as filter · Esc: cancel) ", input),
         Popup::Write(input) => draw_input(frame, area, " Write btsnoop file ", input),
+        Popup::Expr(input) => draw_input(frame, area, " Filter expression — e.g. att && handle == 0x1c · status != Success · rssi < -70 · !log  (empty clears) ", input),
         Popup::Filter { cursor } => draw_filter(frame, app, area, *cursor),
         Popup::Sources { cursor } => draw_sources(frame, app, area, *cursor),
         Popup::AddSource(add) => draw_add_source(frame, area, add),
@@ -546,6 +548,8 @@ Display
 Filtering
   /              search headline and fields (n/N next/previous)
                  Tab in the search box applies the text as a filter
+  e or :         filter expression: att && handle == 0x1c, status != Success,
+                 opcode == 'LE Set Scan Enable', rssi < -70, !log, error, ...
   f              filter dialog: packet types, protocol layers, index, source
 
 Sources
