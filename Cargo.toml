@@ -3,7 +3,9 @@ resolver = "2"
 members = [
     "crates/hcimon-capture",
     "crates/hcimon-decode",
+    "crates/hcimon",
 ]
+default-members = ["crates/hcimon"]
 
 [workspace.package]
 version = "0.2.0"

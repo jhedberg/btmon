@@ -1,0 +1,220 @@
+//! A capture session: sources, the decoder state, an optional capture file and
+//! the packet store shared by the outputs.
+
+use std::collections::HashMap;
+use std::io;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+use hcimon_decode::{decode, Context as DecodeContext, Decoded, Options, Packet, Timestamp};
+use hcimon_capture::btsnoop;
+use crossbeam_channel::{unbounded, Receiver, RecvTimeoutError};
+
+use crate::output::plain::Printer;
+use crate::source::{Event, SourceId, SourceKind, SourceManager};
+use crate::time::TimeMode;
+
+#[derive(Debug, Clone)]
+pub struct SessionConfig {
+    pub write: Option<PathBuf>,
+    pub index: Option<u16>,
+    pub priority: Option<u8>,
+    pub time_mode: TimeMode,
+    pub sco: bool,
+    pub iso: bool,
+    pub vendor: Option<u16>,
+    pub max_packets: usize,
+    pub color: bool,
+    pub columns: usize,
+}
+
+/// A captured packet together with its decoding.
+#[derive(Debug, Clone)]
+pub struct Entry {
+    /// Sequence number within the session (1-based, never reused).
+    pub seq: u64,
+    pub source: SourceId,
+    pub packet: Packet,
+    pub decoded: Decoded,
+}
+
+pub struct Session {
+    pub config: SessionConfig,
+    pub sources: SourceManager,
+    rx: Receiver<Event>,
+    /// Decoder state per source (controller indexes are only unique within a source).
+    contexts: HashMap<SourceId, DecodeContext>,
+    writer: Option<btsnoop::Writer<std::fs::File>>,
+    next_seq: u64,
+    pub first_ts: Option<Timestamp>,
+    pub packets_total: u64,
+}
+
+impl Session {
+    pub fn new(config: SessionConfig) -> Result<Self> {
+        let (tx, rx) = unbounded();
+        let writer = match &config.write {
+            Some(path) => Some(
+                btsnoop::Writer::create(path, btsnoop::Format::Monitor)
+                    .with_context(|| format!("failed to create {}", path.display()))?,
+            ),
+            None => None,
+        };
+        Ok(Session {
+            sources: SourceManager::new(tx),
+            rx,
+            contexts: HashMap::new(),
+            writer,
+            next_seq: 1,
+            first_ts: None,
+            packets_total: 0,
+            config,
+        })
+    }
+
+    pub fn sources(&self) -> &[crate::source::SourceHandle] {
+        self.sources.sources()
+    }
+
+    pub fn add_source(&mut self, kind: SourceKind) -> Result<SourceId> {
+        self.sources.add(kind)
+    }
+
+    pub fn remove_source(&mut self, id: SourceId) -> bool {
+        self.contexts.remove(&id);
+        self.sources.remove(id)
+    }
+
+    /// Label used to distinguish sources in the outputs when more than one is active.
+    pub fn source_label(&self, id: SourceId) -> Option<String> {
+        if self.sources.sources().len() <= 1 {
+            return None;
+        }
+        self.sources.get(id).map(|s| s.kind.label())
+    }
+
+    fn decode_options(&self) -> Options {
+        Options { sco: self.config.sco, iso: self.config.iso, fallback_manufacturer: self.config.vendor }
+    }
+
+    /// Wait for the next event from any source.
+    pub fn next_event(&self, timeout: Duration) -> Option<Event> {
+        match self.rx.recv_timeout(timeout) {
+            Ok(e) => Some(e),
+            Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => None,
+        }
+    }
+
+    /// The channel that sources deliver events on.
+    pub fn receiver(&self) -> &Receiver<Event> {
+        &self.rx
+    }
+
+    /// Start (or switch) recording to a btsnoop file, first writing every packet in `existing`.
+    ///
+    /// Returns the number of packets written from the backlog.
+    pub fn start_writing(&mut self, path: &str, existing: &[Entry]) -> Result<usize> {
+        let mut w = btsnoop::Writer::create(path, btsnoop::Format::Monitor).with_context(|| format!("failed to create {path}"))?;
+        let mut n = 0;
+        for e in existing {
+            if w.write_packet(&e.packet)? {
+                n += 1;
+            }
+        }
+        w.flush()?;
+        self.writer = Some(w);
+        self.config.write = Some(PathBuf::from(path));
+        Ok(n)
+    }
+
+    /// Decode a packet, record it in the capture file and apply the index/priority filters.
+    ///
+    /// Returns `None` when the packet is filtered out.
+    pub fn ingest(&mut self, source: SourceId, packet: Packet) -> Option<Entry> {
+        self.packets_total += 1;
+        if let Some(w) = self.writer.as_mut() {
+            // Flush per packet so that a capture survives an abrupt exit.
+            let _ = w.write_packet(&packet).and_then(|_| w.flush());
+        }
+        if let Some(idx) = self.config.index {
+            if packet.index != idx && packet.index != hcimon_capture::INDEX_NONE {
+                return None;
+            }
+        }
+        if self.first_ts.is_none() {
+            self.first_ts = packet.ts;
+        }
+        let options = self.decode_options();
+        let ctx = self.contexts.entry(source).or_insert_with(|| DecodeContext::with_options(options));
+        let decoded = decode(ctx, &packet);
+        if let (Some(min), Some(p)) = (self.config.priority, decoded.priority) {
+            if p > min {
+                return None;
+            }
+        }
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        Some(Entry { seq, source, packet, decoded })
+    }
+
+    pub fn flush_writer(&mut self) {
+        if let Some(w) = self.writer.as_mut() {
+            let _ = w.flush();
+        }
+    }
+
+    /// Plain streaming mode: print until every source has finished, or until
+    /// SIGINT/SIGTERM, which stop the sources and close the capture file cleanly.
+    pub fn run_plain(mut self) -> Result<()> {
+        let stop = Arc::new(AtomicBool::new(false));
+        {
+            let stop = stop.clone();
+            let _ = ctrlc::set_handler(move || stop.store(true, Ordering::Relaxed));
+        }
+        let stdout = io::stdout();
+        let mut printer = Printer::new(io::BufWriter::new(stdout.lock()), self.config.color, self.config.columns, self.config.time_mode);
+        loop {
+            if stop.load(Ordering::Relaxed) {
+                break;
+            }
+            match self.next_event(Duration::from_millis(200)) {
+                Some(Event::Packet { source, packet }) => {
+                    if let Some(entry) = self.ingest(source, packet) {
+                        let label = self.source_label(source);
+                        printer.print(&entry.packet, &entry.decoded, label.as_deref())?;
+                    }
+                }
+                Some(Event::Status { source, message }) => {
+                    let label = self.source_label(source);
+                    match label {
+                        Some(l) => printer.note(&format!("{l}: {message}"))?,
+                        None => printer.note(&message)?,
+                    }
+                }
+                Some(Event::Error { source, message }) => {
+                    let label = self.source_label(source).unwrap_or_default();
+                    printer.flush()?;
+                    eprintln!("btmon: {label}{}{message}", if label.is_empty() { "" } else { ": " });
+                }
+                Some(Event::Eof { .. }) => {}
+                None => {}
+            }
+            printer.flush()?;
+            if !self.sources.any_running() && self.rx.is_empty() {
+                break;
+            }
+        }
+        self.flush_writer();
+        Ok(())
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.sources.stop_all();
+        self.flush_writer();
+    }
+}

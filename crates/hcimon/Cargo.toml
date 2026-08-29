@@ -1,0 +1,29 @@
+[package]
+name = "hcimon"
+description = "Cross-platform Bluetooth HCI monitor: a btmon work-alike with an interactive terminal UI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+default-run = "hcimon"
+
+[features]
+default = ["rtt"]
+# Read Zephyr's monitor stream from an RTT channel via probe-rs.
+rtt = ["dep:probe-rs"]
+
+[dependencies]
+hcimon-capture.workspace = true
+hcimon-decode.workspace = true
+
+anyhow.workspace = true
+clap.workspace = true
+crossbeam-channel.workspace = true
+ctrlc.workspace = true
+jiff.workspace = true
+ratatui.workspace = true
+serialport.workspace = true
+probe-rs = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
