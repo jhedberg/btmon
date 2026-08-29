@@ -186,12 +186,26 @@ Design choices worth knowing about:
   the reset gap is not recorded anywhere.  Note that a blocking UART monitor
   delays the host stack while it transmits, so round-trip times measured
   over the UART include that overhead; RTT does not have this effect.
+* **Device resets.** A reset in the middle of a frame leaves a cut frame in
+  the stream whose length field still claims the bytes that follow.  The
+  framer checks every frame's payload against its own length fields and only
+  releases it once the header after it checks out too, so the new boot's
+  `New Index` / `Open Index` come through intact instead of being swallowed
+  by the remains of the old frame.  One thing hcimon cannot repair: Zephyr
+  stamps log records with the logging core's clock and switches that clock to
+  the monitor's 100 µs tick only when the monitor's log backend initialises,
+  so records created before that (the boot banner, early driver logs) carry
+  raw cycle counts (32768 Hz on nRF52) that are emitted as if they were
+  ticks — they show up about 0.6 s in the future right after a boot.
 
 ## Testing with Zephyr hardware
 
-`testdata/` contains two raw monitor-stream captures from Silicon Labs xG24
-and SiWx917 boards running `samples/bluetooth/peripheral_hr`; the crate
-tests and `cargo run -p hcimon-decode --example dump -- testdata/xg24_peripheral_hr.tty`
+`testdata/` contains raw monitor-stream captures from Silicon Labs xG24 and
+SiWx917 boards running `samples/bluetooth/peripheral_hr`, and one from an
+nRF52 DK running `samples/bluetooth/observer` over the interrupt-driven UART
+monitor across a J-Link reset (`nrf52dk_observer_reboot.tty`, the framer's
+reboot regression test); the crate tests and
+`cargo run -p hcimon-decode --example dump -- testdata/xg24_peripheral_hr.tty`
 use them.
 
 [probe-rs]: https://probe.rs

@@ -36,7 +36,7 @@ pub fn read_all(path: &str) -> Result<Vec<Packet>> {
     let mut framer = Framer::new();
     framer.push(&data);
     let mut packets = Vec::new();
-    while let Some(f) = framer.next_frame() {
+    while let Some(f) = framer.next_frame().or_else(|| framer.flush()).or_else(|| framer.abandon()) {
         packets.push(f.packet);
     }
     rebase_across_reboots(&mut packets);

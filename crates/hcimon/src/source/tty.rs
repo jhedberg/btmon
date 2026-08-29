@@ -8,7 +8,7 @@
 
 use std::io::{ErrorKind, Read};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use hcimon_capture::tty::Framer;
@@ -45,6 +45,7 @@ fn run(ctx: SourceCtx, path: String, baud: u32, mut port: Option<Box<dyn serialp
     let mut clock = TickClock::new();
     let mut buf = [0u8; 4096];
     let mut announced = false;
+    let mut last_data = Instant::now();
 
     while !ctx.stopped() {
         let Some(p) = port.as_mut() else {
@@ -71,6 +72,7 @@ fn run(ctx: SourceCtx, path: String, baud: u32, mut port: Option<Box<dyn serialp
                 ctx.sleep(RETRY_DELAY);
             }
             Ok(n) => {
+                last_data = Instant::now();
                 framer.push(&buf[..n]);
                 while let Some(frame) = framer.next_frame() {
                     if !ctx.packet(super::stamp(frame, &mut clock)) {
@@ -78,7 +80,20 @@ fn run(ctx: SourceCtx, path: String, baud: u32, mut port: Option<Box<dyn serialp
                     }
                 }
             }
-            Err(e) if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::Interrupted => {}
+            Err(e) if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::Interrupted => {
+                // The line went quiet: release a frame waiting for its successor
+                // and, after a longer silence, give up on an incomplete one.
+                let mut frame = framer.flush();
+                if frame.is_none() && last_data.elapsed() >= super::QUIET_RESYNC {
+                    frame = framer.abandon();
+                }
+                while let Some(f) = frame {
+                    if !ctx.packet(super::stamp(f, &mut clock)) {
+                        return;
+                    }
+                    frame = framer.next_frame().or_else(|| framer.flush());
+                }
+            }
             Err(e) => {
                 ctx.status(format!("{}: {} — waiting for it to return", super::short_path(&path), e));
                 port = None;

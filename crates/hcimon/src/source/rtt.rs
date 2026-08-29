@@ -178,6 +178,18 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
         while !ctx.stopped() {
             match chan.read(&mut core, &mut buf) {
                 Ok(0) => {
+                    // The target went quiet: release a frame waiting for its successor
+                    // and, after a longer silence, give up on an incomplete one.
+                    let mut frame = framer.flush();
+                    if frame.is_none() && last_data.elapsed() >= super::QUIET_RESYNC {
+                        frame = framer.abandon();
+                    }
+                    while let Some(f) = frame {
+                        if !ctx.packet(super::stamp(f, &mut clock)) {
+                            return;
+                        }
+                        frame = framer.next_frame().or_else(|| framer.flush());
+                    }
                     // Back off a little when idle; RTT polling is host driven.
                     let idle = last_data.elapsed();
                     std::thread::sleep(if idle > Duration::from_secs(2) { IDLE_POLL * 4 } else { IDLE_POLL });

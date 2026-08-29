@@ -122,6 +122,11 @@ impl TickClock {
 }
 
 /// Strip `/dev/serial/by-id/` style prefixes for display.
+/// Silence after which an incomplete frame at the head of a device stream is
+/// given up on (see [`hcimon_capture::tty::Framer::abandon`]).  A frame in
+/// transmission never pauses this long; a device reset mid-frame does.
+pub const QUIET_RESYNC: Duration = Duration::from_millis(300);
+
 /// Turn a frame from a device stream into a packet with a wall-clock timestamp.
 pub fn stamp(frame: Frame, clock: &mut TickClock) -> Packet {
     let mut pkt = frame.packet;
