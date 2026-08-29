@@ -1,9 +1,11 @@
 //! btmon — cross-platform Bluetooth HCI monitor.
 
 mod cli;
+mod conversations;
 mod output;
 mod session;
 mod source;
+mod stats;
 mod time;
 mod tui;
 
@@ -14,7 +16,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use ratatui::crossterm::terminal;
 
-use cli::{Cli, Color};
+use cli::{Cli, Color, OutputFormat};
+use output::Format;
 use session::{Session, SessionConfig};
 use source::{discovery, SourceKind};
 use time::TimeMode;
@@ -56,7 +59,13 @@ fn run(cli: Cli) -> Result<()> {
     }
 
     let stdout_tty = io::stdout().is_terminal();
-    let interactive = cli.tui || (!cli.plain && stdout_tty);
+    let format = match cli.format {
+        OutputFormat::Text => Format::Text,
+        OutputFormat::Digest => Format::Digest,
+        OutputFormat::Jsonl => Format::Jsonl,
+        OutputFormat::Summary => Format::Summary,
+    };
+    let interactive = cli.tui || (!cli.plain && stdout_tty && format == Format::Text);
 
     #[cfg(target_os = "linux")]
     if kinds.is_empty() && !interactive {
@@ -119,7 +128,7 @@ fn run(cli: Cli) -> Result<()> {
     if interactive {
         tui::run(session, errors)
     } else {
-        session.run_plain()
+        session.run_plain(format)
     }
 }
 

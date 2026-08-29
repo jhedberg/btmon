@@ -42,8 +42,24 @@ $ hcimon --tty /dev/serial/by-id/usb-SEGGER_J-Link_000682451005-if00 -p
   source / log priority, pause, time display modes, adding and removing
   sources at runtime (new serial ports are detected while running), and
   writing everything captured so far to a btsnoop file.
+* **Analysis features in the spirit of Wireshark** (none of which btmon has):
+  * *display-filter expressions* over every decoded field —
+    `att && handle == 0x1c`, `status != Success`, `opcode == "LE Set Scan Enable"`,
+    `rssi < -70`, `rtt > 5`, `!log`, `error` (`e` in the UI, `-Y` on the command line);
+  * *request/response links* with round-trip times for HCI commands, ATT,
+    L2CAP signaling and SDP (`m` jumps between the two, `rtt` is filterable);
+  * *conversations* — every connection with peer, packet and byte counts and
+    state, and `F` to follow the selected packet's connection;
+  * *expert info* — decoding problems, non-success statuses, rejected
+    requests, disconnect reasons, pairing failures, dropped packets (`!`);
+  * *statistics* — packets by type, protocols, top commands/events/ATT PDUs,
+    round-trip times and activity over time (`S`);
+  * *name resolution* — device names learned from advertising, EIR and
+    remote-name responses shown next to addresses, and vendors from the IEEE
+    OUI registry for public addresses.
 * **Plain mode** (`-p`, or automatically when stdout is not a terminal):
-  btmon-style streaming text output.
+  btmon-style streaming text output, or `--format digest|jsonl|summary`
+  for scripts and LLM-based analysis (see below).
 * **Decoders** for HCI commands, events and LE subevents through Core
   Specification 6.3 (including Channel Sounding, PAwR, ISO, decision-based
   advertising filtering, monitored advertisers, UTP), ACL/SCO/ISO data, L2CAP
@@ -77,7 +93,30 @@ sudo hcimon -K                                # Linux kernel monitor socket (lik
 
 The option names follow BlueZ's `btmon` where the meaning is the same
 (`-r`, `-w`, `-d`/`--tty`, `-B`, `-i`, `-t`, `-T`, `-N`, `-c`, `-S`, `-I`,
-`-C`, `-V`, `-P`).  Press `?` in the UI for the key bindings.
+`-C`, `-V`, `-P`); `-Y` (display filter) and `-f` (output format) are new.
+Press `?` in the UI for the key bindings.
+
+### Working with LLMs and scripts
+
+The text renderer is made for people; for programs (including an LLM that is
+asked to analyse a capture) `--format` offers three denser views, all
+combinable with `-Y` display filters:
+
+```
+hcimon -r capture.snoop -f summary                    # overview: counts, protocols, connections,
+                                                      # round-trip times, activity, all findings
+hcimon -r capture.snoop -f digest -Y 'handle == 0'    # one line per packet with the inner protocol
+                                                      # headline, RTT and findings
+hcimon -r capture.snoop -f jsonl -Y 'frame >= 60 && frame <= 70'
+                                                      # one JSON object per packet: headline, typed
+                                                      # fields, links, findings, full field tree
+```
+
+A workable analysis loop is: read the summary, narrow down with digest lines
+and filters (`error`, `status != Success`, `rtt > 5`, `att`, `smp`, a
+connection handle), then pull the full decode of the few packets that matter
+as JSON. The digest costs roughly one line per packet, the JSON a few hundred
+bytes per packet, so even large captures fit a context window once filtered.
 
 ### Zephyr configuration
 

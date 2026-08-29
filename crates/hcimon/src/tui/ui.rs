@@ -484,7 +484,7 @@ fn draw_sources(frame: &mut Frame, app: &App, area: Rect, cursor: usize) {
     frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Sources ")), rect);
 }
 
-fn draw_conversations(frame: &mut Frame, app: &App, area: Rect, cursor: usize, rows: &[super::conversations::Conversation]) {
+fn draw_conversations(frame: &mut Frame, app: &App, area: Rect, cursor: usize, rows: &[crate::conversations::Conversation]) {
     let multi = app.session.sources().len() > 1;
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
@@ -515,8 +515,8 @@ fn draw_conversations(frame: &mut Frame, app: &App, area: Rect, cursor: usize, r
     frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Conversations ")), rect);
 }
 
-fn draw_stats(frame: &mut Frame, area: Rect, s: &super::stats::Stats) {
-    use super::stats::span_text;
+fn draw_stats(frame: &mut Frame, area: Rect, s: &crate::stats::Stats) {
+    use crate::stats::span_text;
     let bold = Style::default().add_modifier(Modifier::BOLD);
     let dim = Style::default().fg(Color::DarkGray);
     let mut lines: Vec<Line> = Vec::new();

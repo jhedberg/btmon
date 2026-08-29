@@ -108,6 +108,12 @@ pub struct Cli {
     #[arg(short = 'Y', long = "filter", value_name = "EXPR")]
     pub filter: Option<String>,
 
+    /// Output format for non-interactive use (implies --plain):
+    /// text (btmon style), digest (one line per packet), jsonl (one JSON object per packet),
+    /// summary (overview of the whole capture: statistics, connections, findings)
+    #[arg(short = 'f', long = "format", value_enum, default_value_t = OutputFormat::Text)]
+    pub format: OutputFormat,
+
     /// Keep at most this many packets in memory in the interactive UI
     #[arg(long = "max-packets", value_name = "N", default_value_t = 200_000)]
     pub max_packets: usize,
@@ -119,6 +125,14 @@ pub struct Cli {
     /// Print version information
     #[arg(short = 'v', long = "version", action = ArgAction::Version)]
     pub version: (),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum OutputFormat {
+    Text,
+    Digest,
+    Jsonl,
+    Summary,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -134,6 +148,9 @@ Examples:
   hcimon --rtt nRF52832_xxAA --probe 682451005
   hcimon -r capture.snoop -p
   hcimon -r capture.snoop -p -Y 'att && handle == 0x1c'
+  hcimon -r capture.snoop -f summary                  # overview for scripts and LLM analysis
+  hcimon -r capture.snoop -f digest -Y 'rtt > 5'      # one line per packet
+  hcimon -r capture.snoop -f jsonl -Y 'frame == 66'   # full decode as JSON
   hcimon --tty /dev/ttyACM0 -w capture.snoop
 
 Sources can also be added interactively in the UI (press 'a').";

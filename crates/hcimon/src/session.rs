@@ -2,7 +2,7 @@
 //! the packet store shared by the outputs.
 
 use std::collections::HashMap;
-use std::io;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use hcimon_decode::{decode, expert, Context as DecodeContext, Decoded, FieldInde
 use hcimon_capture::btsnoop;
 use crossbeam_channel::{unbounded, Receiver, RecvTimeoutError};
 
-use crate::output::plain::Printer;
+use crate::output::{machine, plain::Printer, Format};
 use crate::source::{Event, SourceId, SourceKind, SourceManager};
 use crate::time::TimeMode;
 
@@ -197,14 +197,17 @@ impl Session {
 
     /// Plain streaming mode: print until every source has finished, or until
     /// SIGINT/SIGTERM, which stop the sources and close the capture file cleanly.
-    pub fn run_plain(mut self) -> Result<()> {
+    pub fn run_plain(mut self, format: Format) -> Result<()> {
         let stop = Arc::new(AtomicBool::new(false));
         {
             let stop = stop.clone();
             let _ = ctrlc::set_handler(move || stop.store(true, Ordering::Relaxed));
         }
         let stdout = io::stdout();
-        let mut printer = Printer::new(io::BufWriter::new(stdout.lock()), self.config.color, self.config.columns, self.config.time_mode);
+        let mut out = io::BufWriter::new(stdout.lock());
+        let mut printer = Printer::new(io::BufWriter::new(io::stdout()), self.config.color, self.config.columns, self.config.time_mode);
+        // The summary needs the whole capture.
+        let mut kept: Vec<Entry> = Vec::new();
         loop {
             if stop.load(Ordering::Relaxed) {
                 break;
@@ -217,14 +220,24 @@ impl Session {
                             continue;
                         }
                         let label = self.source_label(source);
-                        printer.print(&entry.packet, &entry.decoded, label.as_deref())?;
+                        match format {
+                            Format::Text => printer.print(&entry.packet, &entry.decoded, label.as_deref())?,
+                            Format::Digest => machine::write_digest(&mut out, &entry, self.first_ts)?,
+                            Format::Jsonl => {
+                                let src = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
+                                machine::write_jsonl(&mut out, &entry, self.first_ts, &src)?
+                            }
+                            Format::Summary => kept.push(entry),
+                        }
                     }
                 }
                 Some(Event::Status { source, message }) => {
-                    let label = self.source_label(source);
-                    match label {
-                        Some(l) => printer.note(&format!("{l}: {message}"))?,
-                        None => printer.note(&message)?,
+                    if format == Format::Text {
+                        let label = self.source_label(source);
+                        match label {
+                            Some(l) => printer.note(&format!("{l}: {message}"))?,
+                            None => printer.note(&message)?,
+                        }
                     }
                 }
                 Some(Event::Error { source, message }) => {
@@ -236,9 +249,14 @@ impl Session {
                 None => {}
             }
             printer.flush()?;
+            out.flush()?;
             if !self.sources.any_running() && self.rx.is_empty() {
                 break;
             }
+        }
+        if format == Format::Summary {
+            machine::write_summary(&mut out, &kept)?;
+            out.flush()?;
         }
         self.flush_writer();
         Ok(())

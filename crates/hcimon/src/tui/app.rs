@@ -11,7 +11,7 @@ use ratatui::crossterm::execute;
 use ratatui::layout::Rect;
 use ratatui::DefaultTerminal;
 
-use super::conversations::{self, Conversation};
+use crate::conversations::{self, Conversation};
 use super::filter::{Category, Filter, LAYERS};
 use super::ui;
 use super::widgets::{flatten_tree, TextInput};
@@ -77,7 +77,7 @@ pub enum Popup {
     Expr(TextInput),
     Conversations { cursor: usize, rows: Vec<Conversation> },
     Expert { cursor: usize },
-    Stats(super::stats::Stats),
+    Stats(crate::stats::Stats),
     Message { title: String, text: String },
 }
 
@@ -673,7 +673,7 @@ impl App {
             KeyCode::Char('!') => self.popup = Some(Popup::Expert { cursor: self.experts.len().saturating_sub(1) }),
             KeyCode::Char('S') => {
                 let width = (self.areas.list.width as usize).saturating_sub(14).clamp(20, 100);
-                self.popup = Some(Popup::Stats(super::stats::collect(&self.entries, width)));
+                self.popup = Some(Popup::Stats(crate::stats::collect(&self.entries, width)));
             }
             KeyCode::Char('f') => self.popup = Some(Popup::Filter { cursor: 0 }),
             KeyCode::Char('a') => self.popup = Some(Popup::AddSource(AddSource::new(self.default_baud))),
