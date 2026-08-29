@@ -1,0 +1,10 @@
+[package]
+name = "hcimon-capture"
+description = "BlueZ monitor protocol: packet framing (TTY/RTT), btsnoop and Apple PacketLogger file formats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror.workspace = true
