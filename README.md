@@ -143,10 +143,44 @@ For other clients, register the command `hcimon --mcp` as a stdio server.
 ### Zephyr configuration
 
 ```
-CONFIG_BT_DEBUG_MONITOR_UART=y   # monitor stream on the console UART (logs go through it too)
+CONFIG_USE_SEGGER_RTT=y
+CONFIG_BT_DEBUG_MONITOR_RTT=y    # monitor stream on RTT up-buffer 1, named "btmonitor"
 # or
-CONFIG_BT_DEBUG_MONITOR_RTT=y    # monitor stream on an RTT up-channel named "btmonitor"
+CONFIG_BT_DEBUG_MONITOR_UART=y   # monitor stream on a UART
+CONFIG_BT_DEBUG_MONITOR_UART_INTERRUPT_DRIVEN=y   # recommended: no stall of the host stack, drops are counted
+CONFIG_UART_CONSOLE=n            # only if the monitor has to share the board's single UART
 ```
+
+Console output needs no channel of its own once the monitor is on: printk
+and log records travel inside the monitor stream (through the logging
+subsystem with the default `CONFIG_LOG_PRINTK`, or through the monitor's own
+printk hook when no other console is configured) and hcimon shows them as
+`= bt: ...` lines.  What must not share the monitor's UART is anything else
+that writes text to it — the plain-text console (`CONFIG_UART_CONSOLE`, on by
+default) or a shell — because every frame a line lands inside is lost.  The
+shell is usually what is worth keeping next to the monitor, so the
+arrangements that work are:
+
+* **Monitor over RTT, shell (and console) on the UART** — the everyday setup
+  on any board with a SEGGER J-Link: nothing changes on the UART side, and
+  RTT is also the transport with the least effect on the target (see
+  below).  Without `CONFIG_USE_SEGGER_RTT=y` the RTT monitor is silently
+  left out and `hcimon --rtt` keeps waiting for the RTT control block.
+* **Monitor on the UART, shell over RTT** — `CONFIG_SHELL_BACKEND_RTT=y`
+  (up-buffer 0, the terminal channel, so no collision with the monitor's
+  buffer 1) and `CONFIG_UART_CONSOLE=n`.  An RTT terminal and hcimon's RTT
+  reader cannot share the probe, which is why this pairing needs the monitor
+  on the UART; hcimon does not forward the terminal channel yet.
+* **Two UARTs** — point the monitor at the second one with a
+  `zephyr,bt-mon-uart` chosen node in a devicetree overlay and keep console
+  and shell on the other.
+* **One UART and no shell** — `CONFIG_UART_CONSOLE=n`; the monitor takes the
+  console UART.
+
+A blocking UART monitor delays the host stack for the duration of every
+frame (about 1 ms per command round trip at 115200 baud) and loses frames
+without counting them when the line cannot keep up; the interrupt-driven
+variant does neither, and RTT adds only 0.05–0.1 ms.
 
 ## Design
 
@@ -192,11 +226,12 @@ Design choices worth knowing about:
   releases it once the header after it checks out too, so the new boot's
   `New Index` / `Open Index` come through intact instead of being swallowed
   by the remains of the old frame.  One thing hcimon cannot repair: Zephyr
-  stamps log records with the logging core's clock and switches that clock to
-  the monitor's 100 µs tick only when the monitor's log backend initialises,
-  so records created before that (the boot banner, early driver logs) carry
-  raw cycle counts (32768 Hz on nRF52) that are emitted as if they were
-  ticks — they show up about 0.6 s in the future right after a boot.
+  versions up to 4.4 stamp log records with the logging core's clock and
+  switch that clock to the monitor's 100 µs tick only when the monitor's log
+  backend initialises, so records created before that (the boot banner, early
+  driver logs) carry raw cycle counts (32768 Hz on nRF52) that are emitted as
+  if they were ticks — they show up about 0.6 s in the future right after a
+  boot.  A fix for the monitor is pending upstream.
 
 ## Testing with Zephyr hardware
 
