@@ -75,11 +75,11 @@ pub fn collect(entries: &[Entry], buckets: usize) -> Stats {
         match e.packet.opcode {
             Opcode::Command => {
                 if let Some(v) = e.index.get("opcode").next() {
-                    *cmds.entry(v.name.clone()).or_insert(0) += 1;
+                    *cmds.entry(v.name().to_string()).or_insert(0) += 1;
                 }
             }
             Opcode::Event => {
-                let name = e.index.get("subevent").next().or_else(|| e.index.get("event").next()).map(|v| v.name.clone());
+                let name = e.index.get("subevent").next().or_else(|| e.index.get("event").next()).map(|v| v.name().to_string());
                 if let Some(n) = name {
                     *evts.entry(n).or_insert(0) += 1;
                 }

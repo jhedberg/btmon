@@ -195,7 +195,7 @@ impl Loaded {
         let mut map: BTreeMap<String, (usize, Vec<String>)> = BTreeMap::new();
         for e in &self.entries {
             for (k, v) in e.index.fields() {
-                let ent = map.entry(k.clone()).or_default();
+                let ent = map.entry(k.to_string()).or_default();
                 ent.0 += 1;
                 if ent.1.len() < 3 && !ent.1.contains(&v.text) {
                     ent.1.push(v.text.clone());

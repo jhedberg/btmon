@@ -94,7 +94,7 @@ pub fn assess(d: &Decoded, pkt: &Packet, ix: &FieldIndex) -> Vec<Finding> {
     }
     // L2CAP results other than success/pending, and command rejects.
     for r in ix.get("result") {
-        let name = r.name.to_ascii_lowercase();
+        let name = r.name().to_ascii_lowercase();
         if !(name.contains("success") || name.contains("pending") || name.contains("accept") || name.starts_with("all connections")) {
             add(Severity::Warning, format!("L2CAP: {}", r.text));
         }

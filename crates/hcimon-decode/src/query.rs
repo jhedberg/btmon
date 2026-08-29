@@ -44,8 +44,6 @@ use crate::{Decoded, Layer};
 pub struct FieldValue {
     /// The text after the label.
     pub text: String,
-    /// The name part of `Name (0x..)` style values, otherwise the text.
-    pub name: String,
     /// The first number in the text (decimal, hex or with a fraction).
     pub num: Option<f64>,
     /// The raw value given in parentheses, `Name (0x0018)` → 0x18.
@@ -53,12 +51,16 @@ pub struct FieldValue {
 }
 
 impl FieldValue {
+    /// The name part of `Name (0x..)` style values, otherwise the whole text.
+    pub fn name(&self) -> &str {
+        match self.text.find(" (") {
+            Some(i) if self.text.ends_with(')') => &self.text[..i],
+            _ => &self.text,
+        }
+    }
+
     pub fn parse(text: &str) -> Self {
         let text = text.trim().to_string();
-        let name = match text.find(" (") {
-            Some(i) if text.ends_with(')') => text[..i].to_string(),
-            _ => text.clone(),
-        };
         let raw = text.rfind("(0x").and_then(|i| {
             let hex = &text[i + 3..];
             let hex = &hex[..hex.find(')')?];
@@ -69,16 +71,16 @@ impl FieldValue {
             }
         });
         let num = first_number(&text);
-        FieldValue { text, name, num, raw }
+        FieldValue { text, num, raw }
     }
 
     pub fn from_number(n: u64) -> Self {
-        FieldValue { text: n.to_string(), name: n.to_string(), num: Some(n as f64), raw: Some(n) }
+        FieldValue { text: n.to_string(), num: Some(n as f64), raw: Some(n) }
     }
 
     pub fn from_text(s: impl Into<String>) -> Self {
         let text = s.into();
-        FieldValue { name: text.clone(), num: first_number(&text), raw: None, text }
+        FieldValue { num: first_number(&text), raw: None, text }
     }
 }
 
@@ -142,10 +144,26 @@ pub struct PacketMeta<'a> {
     pub source: &'a str,
 }
 
+/// Field keys are interned: the set of distinct labels is small and fixed by
+/// the decoders, while there is one index per packet.
+fn intern(key: &str) -> &'static str {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static KEYS: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
+    let set = KEYS.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut set = set.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(k) = set.get(key) {
+        return k;
+    }
+    let leaked: &'static str = Box::leak(key.to_string().into_boxed_str());
+    set.insert(leaked);
+    leaked
+}
+
 /// All fields of a packet, ready for evaluation.
 #[derive(Debug, Clone, Default)]
 pub struct FieldIndex {
-    fields: Vec<(String, FieldValue)>,
+    fields: Vec<(&'static str, FieldValue)>,
     flags: Vec<&'static str>,
     text: String,
 }
@@ -231,7 +249,7 @@ impl FieldIndex {
                 ix.push("response_to", FieldValue::from_number(l.frame));
                 if let Some(us) = l.elapsed_us {
                     let ms = us as f64 / 1000.0;
-                    ix.push("rtt", FieldValue { text: format!("{ms:.3} ms"), name: format!("{ms:.3}"), num: Some(ms), raw: None });
+                    ix.push("rtt", FieldValue { text: format!("{ms:.3} ms"), num: Some(ms), raw: None });
                 }
             }
         }
@@ -267,20 +285,20 @@ impl FieldIndex {
     }
 
     fn push(&mut self, key: &str, v: FieldValue) {
-        self.fields.push((key.to_string(), v));
+        self.fields.push((intern(key), v));
     }
 
     fn push_owned(&mut self, key: String, v: FieldValue) {
-        self.fields.push((key, v));
+        self.fields.push((intern(&key), v));
     }
 
     /// Values of a field (possibly several).
     pub fn get<'a>(&'a self, key: &'a str) -> impl Iterator<Item = &'a FieldValue> + 'a {
-        self.fields.iter().filter(move |(k, _)| k == key).map(|(_, v)| v)
+        self.fields.iter().filter(move |(k, _)| *k == key).map(|(_, v)| v)
     }
 
     pub fn has(&self, key: &str) -> bool {
-        self.flags.contains(&key) || self.fields.iter().any(|(k, _)| k == key)
+        self.flags.contains(&key) || self.fields.iter().any(|(k, _)| *k == key)
     }
 
     pub fn is_flag(&self, key: &str) -> bool {
@@ -293,7 +311,7 @@ impl FieldIndex {
     }
 
     /// All `(key, value)` pairs.
-    pub fn fields(&self) -> &[(String, FieldValue)] {
+    pub fn fields(&self) -> &[(&'static str, FieldValue)] {
         &self.fields
     }
 }
@@ -468,7 +486,7 @@ fn value_eq(v: &FieldValue, lit: &Literal) -> bool {
     match lit {
         Literal::Number(n) => v.raw.map(|r| r as f64) == Some(*n) || v.num == Some(*n),
         Literal::Text(t) => {
-            v.name.eq_ignore_ascii_case(t)
+            v.name().eq_ignore_ascii_case(t)
                 || v.text.eq_ignore_ascii_case(t)
                 // Addresses may carry a suffix: `4B:65:27:2E:1D:6E (Resolvable)`.
                 || (looks_like_address(t) && v.text.to_ascii_uppercase().starts_with(&t.to_ascii_uppercase()))
@@ -744,7 +762,7 @@ mod tests {
     #[test]
     fn values() {
         let v = FieldValue::parse("Success (0x00)");
-        assert_eq!(v.name, "Success");
+        assert_eq!(v.name(), "Success");
         assert_eq!(v.raw, Some(0));
         let v = FieldValue::parse("30.000 msec (0x0018)");
         assert_eq!(v.num, Some(30.0));

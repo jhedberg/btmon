@@ -158,7 +158,7 @@ pub fn write_jsonl(w: &mut impl Write, e: &Entry, first_ts: Option<Timestamp>, s
     let _ = write!(o, ",\"findings\":[{}]", findings.join(","));
     // Typed fields: key → list of value texts (packet-level built-ins included).
     o.push_str(",\"fields\":{");
-    let mut keys: Vec<&str> = e.index.fields().iter().map(|(k, _)| k.as_str()).collect();
+    let mut keys: Vec<&str> = e.index.fields().iter().map(|(k, _)| *k).collect();
     keys.sort_unstable();
     keys.dedup();
     for (i, k) in keys.iter().enumerate() {
