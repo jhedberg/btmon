@@ -108,6 +108,10 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     if app.dropped > 0 {
         right.push_str(&format!(" · {} dropped", app.dropped));
     }
+    let (errs, warns, _) = app.expert_counts();
+    if errs > 0 || warns > 0 {
+        right.push_str(&format!(" · {errs} err {warns} warn (!)"));
+    }
     if app.paused {
         right.push_str(" · PAUSED");
     } else if app.follow {
@@ -256,6 +260,14 @@ fn draw_details(frame: &mut Frame, app: &mut App, area: Rect) {
         }
     }
     lines.push(Line::from(vec![Span::styled(d.headline(), packet_color(d).add_modifier(Modifier::BOLD)), Span::styled(trailer, Style::default().fg(Color::Yellow))]));
+    for f in &e.findings {
+        let color = match f.severity {
+            hcimon_decode::Severity::Error => Color::Red,
+            hcimon_decode::Severity::Warning => Color::Yellow,
+            hcimon_decode::Severity::Note => Color::Cyan,
+        };
+        lines.push(Line::from(Span::styled(format!("  ⚠ {}", f.text), Style::default().fg(color))));
+    }
     for r in &e.refs {
         let (arrow, what) = match r.kind {
             hcimon_decode::LinkKind::ResponseTo => ("↩", "Response to"),
@@ -327,6 +339,7 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
                 ("m", "linked"),
                 ("F", "follow"),
                 ("C", "conns"),
+                ("!", "expert"),
                 ("f", "filter"),
                 ("a", "add source"),
                 ("s", "sources"),
@@ -377,6 +390,7 @@ fn draw_popup(frame: &mut Frame, app: &App, popup: &Popup, area: Rect) {
         Popup::Filter { cursor } => draw_filter(frame, app, area, *cursor),
         Popup::Sources { cursor } => draw_sources(frame, app, area, *cursor),
         Popup::Conversations { cursor, rows } => draw_conversations(frame, app, area, *cursor, rows),
+        Popup::Expert { cursor } => draw_expert(frame, app, area, *cursor),
         Popup::AddSource(add) => draw_add_source(frame, area, add),
     }
 }
@@ -495,6 +509,47 @@ fn draw_conversations(frame: &mut Frame, app: &App, area: Rect, cursor: usize, r
     frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Conversations ")), rect);
 }
 
+fn draw_expert(frame: &mut Frame, app: &App, area: Rect, cursor: usize) {
+    let height = (area.height.saturating_sub(6)).clamp(6, 30) as usize;
+    let total = app.experts.len();
+    let offset = cursor.saturating_sub(height - 1).min(total.saturating_sub(height));
+    let mut lines: Vec<Line> = Vec::new();
+    let (errs, warns, notes) = app.expert_counts();
+    lines.push(Line::from(vec![
+        Span::styled(format!(" {errs} errors"), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(format!("  {warns} warnings"), Style::default().fg(Color::Yellow)),
+        Span::styled(format!("  {notes} notes"), Style::default().fg(Color::Cyan)),
+    ]));
+    if total == 0 {
+        lines.push(Line::from(Span::styled(" nothing to report", Style::default().fg(Color::DarkGray))));
+    }
+    for (i, (seq, severity)) in app.experts.iter().enumerate().skip(offset).take(height) {
+        let style = if i == cursor { Style::default().bg(Color::Rgb(40, 40, 60)) } else { Style::default() };
+        let color = match severity {
+            hcimon_decode::Severity::Error => Color::Red,
+            hcimon_decode::Severity::Warning => Color::Yellow,
+            hcimon_decode::Severity::Note => Color::Cyan,
+        };
+        let text = app
+            .entries
+            .binary_search_by_key(seq, |e| e.seq)
+            .ok()
+            .and_then(|p| app.entries[p].findings.first().map(|f| f.text.clone()))
+            .unwrap_or_default();
+        lines.push(Line::from(vec![
+            Span::styled(format!(" {seq:>6} "), style.fg(Color::DarkGray)),
+            Span::styled(format!("{:<7} ", severity.name()), style.fg(color)),
+            Span::styled(truncate(&text, (area.width as usize).saturating_sub(24)), style),
+        ]));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(" Enter: go to packet   f: filter to findings   Esc: close", Style::default().fg(Color::DarkGray))));
+    let h = (lines.len() + 2) as u16;
+    let rect = centered_rect(area, area.width.saturating_sub(6).min(120), h);
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Expert info ")), rect);
+}
+
 fn draw_add_source(frame: &mut Frame, area: Rect, add: &super::app::AddSource) {
     let hl = |active: bool| if active { Style::default().bg(Color::Rgb(40, 40, 60)) } else { Style::default() };
     let mut lines: Vec<Line> = Vec::new();
@@ -584,6 +639,7 @@ Navigation
   m              jump to the linked request / response (round-trip time in details)
   F              follow the selected packet's connection (again to stop)
   C              conversations: every connection handle with peer, counts, state
+  !              expert info: errors, non-success statuses, rejects, disconnects
 
 Display
   t              cycle time display: offset, wall time, date, none

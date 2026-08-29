@@ -16,6 +16,7 @@ pub mod ad;
 pub mod assigned;
 pub mod att;
 pub mod context;
+pub mod expert;
 pub mod hci;
 pub mod l2cap;
 pub mod mgmt;
@@ -28,6 +29,7 @@ pub mod uuid;
 
 pub use hcimon_capture::{Opcode, Packet, Timestamp};
 pub use context::{Connection, Context, IndexState, LinkType, Options};
+pub use expert::{Finding, Severity};
 pub use monitor::decode;
 pub use query::{FieldIndex, PacketMeta, Query};
 pub use reader::{BdAddr, Reader, Result, Truncated};

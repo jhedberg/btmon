@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use hcimon_decode::{decode, Context as DecodeContext, Decoded, FieldIndex, LinkKind, Options, Packet, PacketMeta, Query, Timestamp};
+use hcimon_decode::{decode, expert, Context as DecodeContext, Decoded, FieldIndex, Finding, LinkKind, Options, Packet, PacketMeta, Query, Timestamp};
 use hcimon_capture::btsnoop;
 use crossbeam_channel::{unbounded, Receiver, RecvTimeoutError};
 
@@ -63,6 +63,8 @@ pub struct Entry {
     pub index: FieldIndex,
     /// Requests this packet answers and responses that answered it, in session numbers.
     pub refs: Vec<Ref>,
+    /// Expert findings (problems worth a look), most severe first.
+    pub findings: Vec<Finding>,
 }
 
 pub struct Session {
@@ -183,7 +185,8 @@ impl Session {
         self.next_seq += 1;
         let label = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
         let index = FieldIndex::build(&decoded, &packet, PacketMeta { seq, source: &label });
-        Some(Entry { seq, source, packet, decoded, index, refs: Vec::new() })
+        let findings = expert::assess(&decoded, &packet, &index);
+        Some(Entry { seq, source, packet, decoded, index, refs: Vec::new(), findings })
     }
 
     pub fn flush_writer(&mut self) {

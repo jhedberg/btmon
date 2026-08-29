@@ -16,7 +16,7 @@ use super::filter::{Category, Filter, LAYERS};
 use super::ui;
 use super::widgets::{flatten_tree, TextInput};
 use crate::session::{Entry, Ref, Session};
-use hcimon_decode::LinkKind;
+use hcimon_decode::{LinkKind, Severity};
 use crate::source::discovery::{self, ProbeCandidate, SerialCandidate};
 use crate::source::{Event as SourceEvent, SourceId, SourceKind};
 use crate::time::TimeMode;
@@ -76,6 +76,7 @@ pub enum Popup {
     Search(TextInput),
     Expr(TextInput),
     Conversations { cursor: usize, rows: Vec<Conversation> },
+    Expert { cursor: usize },
     Message { title: String, text: String },
 }
 
@@ -216,6 +217,8 @@ pub struct App {
     pub filtered_out: u64,
     /// `(source, controller index, frame)` → session sequence number, for resolving links.
     frame_map: HashMap<(SourceId, u16, u64), u64>,
+    /// Packets with expert findings: `(seq, severity)`, in arrival order.
+    pub experts: Vec<(u64, Severity)>,
     known_ports: HashSet<String>,
     last_discovery: Instant,
     should_quit: bool,
@@ -258,6 +261,7 @@ impl App {
             dropped: 0,
             filtered_out: 0,
             frame_map: HashMap::new(),
+            experts: Vec::new(),
             known_ports,
             last_discovery: Instant::now(),
             should_quit: false,
@@ -306,6 +310,9 @@ impl App {
         if !show {
             self.filtered_out += 1;
         }
+        if let Some(f) = entry.findings.first() {
+            self.experts.push((entry.seq, f.severity));
+        }
         self.entries.push(entry);
         if self.entries.len() > self.session.config.max_packets {
             self.drop_oldest(self.session.config.max_packets / 10);
@@ -324,6 +331,8 @@ impl App {
         for e in &self.entries[..n] {
             self.frame_map.remove(&(e.source, e.packet.index, e.decoded.frame));
         }
+        let oldest = self.entries.get(n).map(|e| e.seq).unwrap_or(u64::MAX);
+        self.experts.retain(|(seq, _)| *seq >= oldest);
         self.entries.drain(..n);
         self.dropped += n as u64;
         self.visible.retain(|&i| i >= n);
@@ -356,6 +365,7 @@ impl App {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.frame_map.clear();
+        self.experts.clear();
         self.visible.clear();
         self.selected = None;
         self.list_offset = 0;
@@ -477,6 +487,32 @@ impl App {
             Some(&h) => self.follow_handle(h),
             None => self.set_message("the selected packet is not tied to a connection", false),
         }
+    }
+
+    /// Select the packet with sequence number `seq` if it is in the list.
+    fn select_seq(&mut self, seq: u64) {
+        match self.visible.iter().position(|&i| self.entries[i].seq == seq) {
+            Some(vi) => {
+                self.selected = Some(vi);
+                self.follow = false;
+                self.dirty = true;
+            }
+            None if self.entry_pos(seq).is_some() => self.set_message(format!("packet {seq} is hidden by the current filter"), false),
+            None => self.set_message(format!("packet {seq} is no longer in memory"), false),
+        }
+    }
+
+    /// Counts of packets with error / warning / note findings.
+    pub fn expert_counts(&self) -> (usize, usize, usize) {
+        let mut c = (0, 0, 0);
+        for (_, s) in &self.experts {
+            match s {
+                Severity::Error => c.0 += 1,
+                Severity::Warning => c.1 += 1,
+                Severity::Note => c.2 += 1,
+            }
+        }
+        c
     }
 
     /// Jump to the packet the selected one is linked to (its request or its response).
@@ -623,6 +659,7 @@ impl App {
             KeyCode::Char('m') => self.jump_to_linked(),
             KeyCode::Char('F') => self.follow_selected(),
             KeyCode::Char('C') => self.popup = Some(Popup::Conversations { cursor: 0, rows: conversations::collect(&self.entries) }),
+            KeyCode::Char('!') => self.popup = Some(Popup::Expert { cursor: self.experts.len().saturating_sub(1) }),
             KeyCode::Char('f') => self.popup = Some(Popup::Filter { cursor: 0 }),
             KeyCode::Char('a') => self.popup = Some(Popup::AddSource(AddSource::new(self.default_baud))),
             KeyCode::Char('s') => self.popup = Some(Popup::Sources { cursor: 0 }),
@@ -834,6 +871,40 @@ impl App {
                     }
                 }
                 _ => self.popup = Some(Popup::Conversations { cursor, rows }),
+            },
+            Popup::Expert { mut cursor } => match key.code {
+                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('!') => {}
+                KeyCode::Up | KeyCode::Char('k') => {
+                    cursor = cursor.saturating_sub(1);
+                    self.popup = Some(Popup::Expert { cursor });
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    cursor = (cursor + 1).min(self.experts.len().saturating_sub(1));
+                    self.popup = Some(Popup::Expert { cursor });
+                }
+                KeyCode::PageUp => {
+                    cursor = cursor.saturating_sub(15);
+                    self.popup = Some(Popup::Expert { cursor });
+                }
+                KeyCode::PageDown => {
+                    cursor = (cursor + 15).min(self.experts.len().saturating_sub(1));
+                    self.popup = Some(Popup::Expert { cursor });
+                }
+                KeyCode::Home => self.popup = Some(Popup::Expert { cursor: 0 }),
+                KeyCode::End => self.popup = Some(Popup::Expert { cursor: self.experts.len().saturating_sub(1) }),
+                KeyCode::Enter => {
+                    if let Some(&(seq, _)) = self.experts.get(cursor) {
+                        self.select_seq(seq);
+                    }
+                }
+                KeyCode::Char('f') => {
+                    // Keep only packets with findings.
+                    if let Ok(q) = hcimon_decode::Query::parse("error || status != Success || reason || result") {
+                        self.filter.expr = Some(q);
+                        self.rebuild_visible();
+                    }
+                }
+                _ => self.popup = Some(Popup::Expert { cursor }),
             },
             Popup::Sources { mut cursor } => {
                 let n = self.session.sources().len();
