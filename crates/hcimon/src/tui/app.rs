@@ -11,6 +11,7 @@ use ratatui::crossterm::execute;
 use ratatui::layout::Rect;
 use ratatui::DefaultTerminal;
 
+use super::conversations::{self, Conversation};
 use super::filter::{Category, Filter, LAYERS};
 use super::ui;
 use super::widgets::{flatten_tree, TextInput};
@@ -74,6 +75,7 @@ pub enum Popup {
     Write(TextInput),
     Search(TextInput),
     Expr(TextInput),
+    Conversations { cursor: usize, rows: Vec<Conversation> },
     Message { title: String, text: String },
 }
 
@@ -452,6 +454,31 @@ impl App {
         }
     }
 
+    /// Restrict the list to one connection handle, or lift that restriction if it is already in place.
+    fn follow_handle(&mut self, handle: u16) {
+        let expr = format!("handle == {handle}");
+        if self.filter.expr.as_ref().map(|q| q.source() == expr).unwrap_or(false) {
+            self.filter.expr = None;
+            self.rebuild_visible();
+            self.set_message("no longer following a connection", false);
+            return;
+        }
+        if let Ok(q) = hcimon_decode::Query::parse(&expr) {
+            self.filter.expr = Some(q);
+            self.rebuild_visible();
+            self.set_message(format!("following connection handle {handle} ({} packets); F again to stop", self.visible.len()), false);
+        }
+    }
+
+    /// Follow the connection of the selected packet.
+    fn follow_selected(&mut self) {
+        let Some(e) = self.selected_entry() else { return };
+        match conversations::handles_of(e).first() {
+            Some(&h) => self.follow_handle(h),
+            None => self.set_message("the selected packet is not tied to a connection", false),
+        }
+    }
+
     /// Jump to the packet the selected one is linked to (its request or its response).
     fn jump_to_linked(&mut self) {
         let Some(e) = self.selected_entry() else { return };
@@ -594,6 +621,8 @@ impl App {
             KeyCode::Char('n') => self.find_next(true),
             KeyCode::Char('N') => self.find_next(false),
             KeyCode::Char('m') => self.jump_to_linked(),
+            KeyCode::Char('F') => self.follow_selected(),
+            KeyCode::Char('C') => self.popup = Some(Popup::Conversations { cursor: 0, rows: conversations::collect(&self.entries) }),
             KeyCode::Char('f') => self.popup = Some(Popup::Filter { cursor: 0 }),
             KeyCode::Char('a') => self.popup = Some(Popup::AddSource(AddSource::new(self.default_baud))),
             KeyCode::Char('s') => self.popup = Some(Popup::Sources { cursor: 0 }),
@@ -613,7 +642,6 @@ impl App {
             KeyCode::Char('[') => self.split = self.split.saturating_sub(5).max(20),
             KeyCode::Char(']') => self.split = (self.split + 5).min(80),
             KeyCode::Char('x') => self.show_hex = !self.show_hex,
-            KeyCode::Char('F') => self.select_last(),
             KeyCode::Tab => {
                 self.focus = match self.focus {
                     Focus::List => Focus::Details,
@@ -780,6 +808,33 @@ impl App {
                     _ => self.popup = Some(Popup::Filter { cursor }),
                 }
             }
+            Popup::Conversations { mut cursor, rows } => match key.code {
+                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('C') => {}
+                KeyCode::Up | KeyCode::Char('k') => {
+                    cursor = cursor.saturating_sub(1);
+                    self.popup = Some(Popup::Conversations { cursor, rows });
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    cursor = (cursor + 1).min(rows.len().saturating_sub(1));
+                    self.popup = Some(Popup::Conversations { cursor, rows });
+                }
+                KeyCode::Enter | KeyCode::Char('F') => {
+                    if let Some(c) = rows.get(cursor) {
+                        self.follow_handle(c.handle);
+                    }
+                }
+                KeyCode::Char('g') => {
+                    // Go to the first packet of the conversation.
+                    if let Some(c) = rows.get(cursor) {
+                        let target = c.first;
+                        if let Some(vi) = self.visible.iter().position(|&i| self.entries[i].seq == target) {
+                            self.selected = Some(vi);
+                            self.follow = false;
+                        }
+                    }
+                }
+                _ => self.popup = Some(Popup::Conversations { cursor, rows }),
+            },
             Popup::Sources { mut cursor } => {
                 let n = self.session.sources().len();
                 match key.code {

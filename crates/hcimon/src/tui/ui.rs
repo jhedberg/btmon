@@ -325,6 +325,8 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
                 ("/", "search"),
                 ("e", "expr"),
                 ("m", "linked"),
+                ("F", "follow"),
+                ("C", "conns"),
                 ("f", "filter"),
                 ("a", "add source"),
                 ("s", "sources"),
@@ -374,6 +376,7 @@ fn draw_popup(frame: &mut Frame, app: &App, popup: &Popup, area: Rect) {
         Popup::Expr(input) => draw_input(frame, area, " Filter expression — e.g. att && handle == 0x1c · status != Success · rssi < -70 · !log  (empty clears) ", input),
         Popup::Filter { cursor } => draw_filter(frame, app, area, *cursor),
         Popup::Sources { cursor } => draw_sources(frame, app, area, *cursor),
+        Popup::Conversations { cursor, rows } => draw_conversations(frame, app, area, *cursor, rows),
         Popup::AddSource(add) => draw_add_source(frame, area, add),
     }
 }
@@ -459,6 +462,37 @@ fn draw_sources(frame: &mut Frame, app: &App, area: Rect, cursor: usize) {
     let rect = centered_rect(area, 78, h);
     frame.render_widget(Clear, rect);
     frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Sources ")), rect);
+}
+
+fn draw_conversations(frame: &mut Frame, app: &App, area: Rect, cursor: usize, rows: &[super::conversations::Conversation]) {
+    let multi = app.session.sources().len() > 1;
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(Span::styled(
+        format!(" {:<6} {:<24} {:>6} {:>6} {:>9} {:>8} {:>8}  {}", "Handle", "Peer", "TX", "RX", "Bytes", "First", "Last", "State"),
+        Style::default().add_modifier(Modifier::BOLD),
+    )));
+    if rows.is_empty() {
+        lines.push(Line::from(Span::styled(" (no connections seen yet)", Style::default().fg(Color::DarkGray))));
+    }
+    for (i, c) in rows.iter().enumerate() {
+        let style = if i == cursor { Style::default().bg(Color::Rgb(40, 40, 60)) } else { Style::default() };
+        let mut handle = format!("{}", c.handle);
+        if multi {
+            handle = format!("{}/{}", c.source, handle);
+        }
+        let peer = truncate(if c.peer.is_empty() { "?" } else { &c.peer }, 24);
+        let state = if c.open { "open" } else { "closed" };
+        lines.push(Line::from(vec![
+            Span::styled(format!(" {handle:<6} {peer:<24} {:>6} {:>6} {:>9} {:>8} {:>8}  ", c.tx, c.rx, c.bytes, c.first, c.last), style),
+            Span::styled(state, style.fg(if c.open { Color::Green } else { Color::DarkGray })),
+        ]));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(" Enter/F: follow this connection (filter)   g: go to first packet   Esc: close", Style::default().fg(Color::DarkGray))));
+    let h = (lines.len() + 2) as u16;
+    let rect = centered_rect(area, 92, h);
+    frame.render_widget(Clear, rect);
+    frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Conversations ")), rect);
 }
 
 fn draw_add_source(frame: &mut Frame, area: Rect, add: &super::app::AddSource) {
@@ -548,6 +582,8 @@ Navigation
   Enter/→        open details           Tab         switch list/details
   ←              collapse / back        Enter/space toggle node in details
   m              jump to the linked request / response (round-trip time in details)
+  F              follow the selected packet's connection (again to stop)
+  C              conversations: every connection handle with peer, counts, state
 
 Display
   t              cycle time display: offset, wall time, date, none

@@ -197,6 +197,12 @@ impl FieldIndex {
             ix.push("dir", FieldValue::from_text(dir));
         }
         match pkt.opcode {
+            Opcode::AclTx | Opcode::AclRx | Opcode::ScoTx | Opcode::ScoRx | Opcode::IsoTx | Opcode::IsoRx => {
+                // `Handle 0 flags 0x02` — the connection handle of a data packet.
+                if let Some(h) = d.summary.strip_prefix("Handle ").and_then(|s| s.split(' ').next()).and_then(|s| s.parse::<u64>().ok()) {
+                    ix.push("handle", FieldValue::from_number(h));
+                }
+            }
             Opcode::Command => ix.push("opcode", FieldValue::parse(&d.summary)),
             Opcode::Event => {
                 ix.push("event", FieldValue::parse(&d.summary));
@@ -264,9 +270,8 @@ impl FieldIndex {
     }
 
     /// Values of a field (possibly several).
-    pub fn get<'a>(&'a self, key: &str) -> impl Iterator<Item = &'a FieldValue> + 'a {
-        let key = key.to_string();
-        self.fields.iter().filter(move |(k, _)| *k == key).map(|(_, v)| v)
+    pub fn get<'a>(&'a self, key: &'a str) -> impl Iterator<Item = &'a FieldValue> + 'a {
+        self.fields.iter().filter(move |(k, _)| k == key).map(|(_, v)| v)
     }
 
     pub fn has(&self, key: &str) -> bool {
