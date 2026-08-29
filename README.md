@@ -181,9 +181,11 @@ Design choices worth knowing about:
   tick from there (re-anchoring when the device reboots), so files written
   from a board carry real times while keeping the device's timing precision.
   Raw stream files read back later have no such anchor and are shown as
-  offsets (`Timestamp::Monotonic`).  Note that a blocking UART monitor delays
-  the host stack while it transmits, so round-trip times measured over the
-  UART include that overhead; RTT does not have this effect.
+  offsets (`Timestamp::Monotonic`); when such a file spans a reboot, each
+  boot continues from where the previous one left off, since the length of
+  the reset gap is not recorded anywhere.  Note that a blocking UART monitor
+  delays the host stack while it transmits, so round-trip times measured
+  over the UART include that overhead; RTT does not have this effect.
 
 ## Testing with Zephyr hardware
 
