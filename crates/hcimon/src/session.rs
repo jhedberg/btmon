@@ -31,6 +31,8 @@ pub struct SessionConfig {
     pub columns: usize,
     /// Display filter applied in plain mode (the UI keeps its own).
     pub filter: Option<Query>,
+    /// Packets of context to print around each match in plain mode.
+    pub context: usize,
 }
 
 /// A reference to another packet of the session (request/response pairing).
@@ -208,6 +210,11 @@ impl Session {
         let mut printer = Printer::new(io::BufWriter::new(io::stdout()), self.config.color, self.config.columns, self.config.time_mode);
         // The summary needs the whole capture.
         let mut kept: Vec<Entry> = Vec::new();
+        // Context windows: recent non-matching packets, and how many more to print after a match.
+        let context = if self.config.filter.is_some() { self.config.context } else { 0 };
+        let mut before: std::collections::VecDeque<Entry> = std::collections::VecDeque::new();
+        let mut after_left = 0usize;
+        let mut last_printed: Option<u64> = None;
         loop {
             if stop.load(Ordering::Relaxed) {
                 break;
@@ -216,18 +223,50 @@ impl Session {
                 Some(Event::Packet { source, packet }) => {
                     if let Some(entry) = self.ingest(source, packet) {
                         printer.set_origin(self.first_ts);
-                        if self.config.filter.as_ref().is_some_and(|q| !q.matches(&entry.index)) {
+                        let matches = self.config.filter.as_ref().is_none_or(|q| q.matches(&entry.index));
+                        let mut to_print: Vec<(Entry, bool)> = Vec::new();
+                        if matches {
+                            for e in before.drain(..) {
+                                to_print.push((e, true));
+                            }
+                            to_print.push((entry, false));
+                            after_left = context;
+                        } else if after_left > 0 {
+                            after_left -= 1;
+                            to_print.push((entry, true));
+                        } else if context > 0 {
+                            if before.len() >= context {
+                                before.pop_front();
+                            }
+                            before.push_back(entry);
+                            continue;
+                        } else {
                             continue;
                         }
-                        let label = self.source_label(source);
-                        match format {
-                            Format::Text => printer.print(&entry.packet, &entry.decoded, label.as_deref())?,
-                            Format::Digest => machine::write_digest(&mut out, &entry, self.first_ts)?,
-                            Format::Jsonl => {
-                                let src = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
-                                machine::write_jsonl(&mut out, &entry, self.first_ts, &src)?
+                        for (entry, is_context) in to_print {
+                            if context > 0 && last_printed.is_some_and(|l| entry.seq != l + 1) && format != Format::Summary {
+                                writeln!(out, "--")?;
                             }
-                            Format::Summary => kept.push(entry),
+                            last_printed = Some(entry.seq);
+                            let label = self.source_label(source);
+                            match format {
+                                Format::Text => {
+                                    printer.flush()?;
+                                    printer.print(&entry.packet, &entry.decoded, label.as_deref())?;
+                                    printer.flush()?;
+                                }
+                                Format::Digest => {
+                                    if is_context {
+                                        write!(out, "  ")?;
+                                    }
+                                    machine::write_digest(&mut out, &entry, self.first_ts)?;
+                                }
+                                Format::Jsonl => {
+                                    let src = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
+                                    machine::write_jsonl(&mut out, &entry, self.first_ts, &src)?
+                                }
+                                Format::Summary => kept.push(entry),
+                            }
                         }
                     }
                 }

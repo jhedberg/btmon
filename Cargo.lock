@@ -879,6 +879,7 @@ dependencies = [
  "libc",
  "probe-rs",
  "ratatui",
+ "serde_json",
  "serialport",
 ]
 

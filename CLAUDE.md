@@ -11,5 +11,7 @@ Cross-platform Bluetooth HCI monitor in Rust (BlueZ btmon work-alike with a TUI)
   Core Spec text) and `crates/hcimon-decode/src/assigned/` (`tools/gen_assigned_numbers.py`).
   Never edit them by hand.
 - Output wording follows BlueZ btmon; decoders never panic and report truncation in the tree.
+- Machine interfaces: `-f digest|jsonl|summary`, `-Y` filters, `-X` context, `--fields`, and
+  `--mcp` (stdio MCP server; tools in `crates/hcimon/src/mcp.rs`, primitives in `analysis.rs`).
 - Commits: `area: Subject` (area = crate/module), explanatory body, trailer block last with
   `Assisted-by: Claude:<model-id>` before `Signed-off-by:`; no other AI mentions.

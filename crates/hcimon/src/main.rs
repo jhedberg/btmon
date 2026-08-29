@@ -1,7 +1,9 @@
 //! btmon — cross-platform Bluetooth HCI monitor.
 
+mod analysis;
 mod cli;
 mod conversations;
+mod mcp;
 mod output;
 mod session;
 mod source;
@@ -40,6 +42,17 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<()> {
     if cli.list {
         return list_devices();
+    }
+    if cli.mcp {
+        return mcp::serve();
+    }
+    if cli.fields {
+        let loaded = match cli.read.first() {
+            Some(p) => Some(analysis::Loaded::from_file(&p.to_string_lossy())?),
+            None => None,
+        };
+        print!("{}", analysis::field_dictionary(loaded.as_ref()));
+        return Ok(());
     }
 
     let mut kinds: Vec<SourceKind> = Vec::new();
@@ -109,6 +122,7 @@ fn run(cli: Cli) -> Result<()> {
         color,
         columns,
         filter,
+        context: cli.context,
     };
 
     let mut session = Session::new(config)?;

@@ -114,6 +114,19 @@ pub struct Cli {
     #[arg(short = 'f', long = "format", value_enum, default_value_t = OutputFormat::Text)]
     pub format: OutputFormat,
 
+    /// Also show N packets before and after every packet that matches --filter
+    #[arg(short = 'X', long = "context", value_name = "N", default_value_t = 0)]
+    pub context: usize,
+
+    /// Print the filter expression language and field names, then exit
+    /// (with -r FILE, also every field present in that capture)
+    #[arg(long = "fields")]
+    pub fields: bool,
+
+    /// Run as a Model Context Protocol server on stdin/stdout, exposing capture analysis tools
+    #[arg(long = "mcp")]
+    pub mcp: bool,
+
     /// Keep at most this many packets in memory in the interactive UI
     #[arg(long = "max-packets", value_name = "N", default_value_t = 200_000)]
     pub max_packets: usize,
@@ -151,6 +164,9 @@ Examples:
   hcimon -r capture.snoop -f summary                  # overview for scripts and LLM analysis
   hcimon -r capture.snoop -f digest -Y 'rtt > 5'      # one line per packet
   hcimon -r capture.snoop -f jsonl -Y 'frame == 66'   # full decode as JSON
+  hcimon -r capture.snoop -Y 'error' -X 3 -f digest   # matches with 3 packets of context
+  hcimon --fields -r capture.snoop                    # filter field dictionary
+  hcimon --mcp                                        # MCP server for LLM clients
   hcimon --tty /dev/ttyACM0 -w capture.snoop
 
 Sources can also be added interactively in the UI (press 'a').";

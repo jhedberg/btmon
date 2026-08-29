@@ -22,6 +22,7 @@ crossbeam-channel.workspace = true
 ctrlc.workspace = true
 jiff.workspace = true
 ratatui.workspace = true
+serde_json.workspace = true
 serialport.workspace = true
 probe-rs = { workspace = true, optional = true }
 

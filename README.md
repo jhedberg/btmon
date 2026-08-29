@@ -117,6 +117,25 @@ and filters (`error`, `status != Success`, `rtt > 5`, `att`, `smp`, a
 connection handle), then pull the full decode of the few packets that matter
 as JSON. The digest costs roughly one line per packet, the JSON a few hundred
 bytes per packet, so even large captures fit a context window once filtered.
+`-X N` adds N packets of context around every match (context lines are
+indented, groups separated by `--`), and `--fields` prints the filter
+language with every field name, with `-r FILE` also the fields that occur in
+that capture, with counts and example values.
+
+#### MCP server
+
+`hcimon --mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io)
+server on stdin/stdout that exposes the same primitives as tools — `summary`,
+`digest` (filter, first/last, context, limit), `count`, `packet` (text or
+JSON), `conversations`, `findings`, `fields` — so an LLM client can explore a
+capture step by step without ever being handed the whole file. Captures are
+decoded once and cached for the life of the server.
+
+```
+claude mcp add hcimon -- /path/to/hcimon --mcp        # Claude Code
+```
+
+For other clients, register the command `hcimon --mcp` as a stdio server.
 
 ### Zephyr configuration
 
