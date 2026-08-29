@@ -20,7 +20,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::Result;
-use hcimon_capture::{Packet, Timestamp};
+use hcimon_capture::tty::Frame;
+use hcimon_capture::{Opcode, Packet, Timestamp};
 use crossbeam_channel::Sender;
 
 /// Identifies a source within a session.
@@ -60,46 +61,81 @@ impl SourceKind {
 /// Turns the free-running 100 µs tick of the monitor stream into wall-clock
 /// timestamps: the first packet is anchored at the host's clock and later
 /// ones follow the device's own tick, which is finer and steadier than the
-/// host's arrival time.  A tick going backwards by a lot means the device
-/// rebooted, and the clock re-anchors; a small wrap is the 32-bit counter.
+/// host's arrival time.
+///
+/// Ticks are not monotonic in the stream: Zephyr stamps log records when
+/// they are created and sends them later, so a record may carry a tick up to
+/// a second or so older than its predecessor.  Those keep the anchor.  The
+/// clock re-anchors when the device announces a reboot (New Index) or when
+/// the tick jumps back by more than [`REBOOT_JUMP`]; a wrap of the 32-bit
+/// counter near its maximum is carried into the next epoch.  Sources also
+/// call [`TickClock::reset`] on New Index / Open Index records, which a
+/// rebooting device sends first (the very first frame after a reboot is
+/// often cut, so either record counts).
 #[derive(Debug, Default)]
 pub struct TickClock {
     anchor_wall_us: i64,
     anchor_tick: u64,
-    last_tick: u64,
+    epoch: u64,
+    high_water: u64,
     anchored: bool,
 }
+
+/// Backwards jump (in 100 µs ticks) taken as a device reboot: 5 s, well above
+/// the lag of deferred log records (about a second) and below most uptimes.
+const REBOOT_JUMP: u64 = 50_000;
 
 impl TickClock {
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Forget the anchor: the next tick is stamped with the host's clock.
+    pub fn reset(&mut self) {
+        self.anchored = false;
+        self.epoch = 0;
+        self.high_water = 0;
+    }
+
     pub fn wall(&mut self, tick100us: u32) -> Timestamp {
         let now = Timestamp::now().micros();
-        let mut tick = tick100us as u64;
+        let raw = tick100us as u64;
         if self.anchored {
-            if tick < self.last_tick {
-                if self.last_tick - tick > u32::MAX as u64 / 2 {
-                    // 32-bit wraparound (about 5 days at 100 µs).
-                    tick += 1u64 << 32;
-                } else {
-                    // The device restarted its clock.
-                    self.anchored = false;
-                }
+            if raw + REBOOT_JUMP < self.high_water && self.high_water > u32::MAX as u64 - REBOOT_JUMP {
+                // Counter wrapped (the previous ticks were near the maximum).
+                self.epoch += 1u64 << 32;
+                self.high_water = raw;
+            } else if raw + REBOOT_JUMP < self.high_water {
+                self.reset();
             }
         }
+        let tick = raw + self.epoch;
         if !self.anchored {
             self.anchor_wall_us = now;
             self.anchor_tick = tick;
             self.anchored = true;
+            self.high_water = raw;
         }
-        self.last_tick = tick;
-        Timestamp::Wall(self.anchor_wall_us + (tick - self.anchor_tick) as i64 * 100)
+        self.high_water = self.high_water.max(raw);
+        Timestamp::Wall(self.anchor_wall_us + tick as i64 * 100 - self.anchor_tick as i64 * 100)
     }
 }
 
 /// Strip `/dev/serial/by-id/` style prefixes for display.
+/// Turn a frame from a device stream into a packet with a wall-clock timestamp.
+pub fn stamp(frame: Frame, clock: &mut TickClock) -> Packet {
+    let mut pkt = frame.packet;
+    if matches!(pkt.opcode, Opcode::NewIndex | Opcode::OpenIndex) {
+        // The device announced a (re)boot: its tick starts over.
+        clock.reset();
+    }
+    pkt.ts = Some(match frame.ts32 {
+        Some(t) => clock.wall(t),
+        None => Timestamp::now(),
+    });
+    pkt
+}
+
 pub fn short_path(path: &str) -> &str {
     path.strip_prefix("/dev/serial/by-id/").unwrap_or(path)
 }
@@ -263,15 +299,26 @@ mod tests {
         let t0 = c.wall(1000).micros();
         let t1 = c.wall(1010).micros();
         assert_eq!(t1 - t0, 1000, "10 ticks of 100 µs");
-        // Small wrap of the 32-bit counter keeps counting forward.
+        // A late log record (tick slightly in the past) keeps the anchor and gets an earlier time.
+        let t2 = c.wall(990).micros();
+        assert_eq!(t0 - t2, 1000);
+        let t3 = c.wall(1020).micros();
+        assert_eq!(t3 - t0, 2000);
+        // Wrap of the 32-bit counter keeps counting forward.
         let mut c = TickClock::new();
         let a = c.wall(u32::MAX - 5).micros();
         let b = c.wall(4).micros();
         assert_eq!(b - a, 10 * 100);
-        // A large jump backwards is a reboot: time keeps moving forward from "now".
+        // A jump backwards of more than a few seconds is a reboot: time restarts near "now".
         let mut c = TickClock::new();
-        let a = c.wall(5_000_000).micros();
+        let a = c.wall(150_000).micros();
         let b = c.wall(10).micros();
         assert!(b >= a - 1_000_000, "re-anchored near the host clock, not 500 s in the past");
+        // An explicit reset (New Index) does the same for small ticks.
+        let mut c = TickClock::new();
+        let a = c.wall(200_000).micros();
+        c.reset();
+        let b = c.wall(5).micros();
+        assert!(b >= a - 1_000_000);
     }
 }

@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use hcimon_capture::{tty::Framer, Timestamp};
+use hcimon_capture::tty::Framer;
 
 use super::TickClock;
 
@@ -73,12 +73,7 @@ fn run(ctx: SourceCtx, path: String, baud: u32, mut port: Option<Box<dyn serialp
             Ok(n) => {
                 framer.push(&buf[..n]);
                 while let Some(frame) = framer.next_frame() {
-                    let mut pkt = frame.packet;
-                    pkt.ts = Some(match frame.ts32 {
-                        Some(t) => clock.wall(t),
-                        None => Timestamp::now(),
-                    });
-                    if !ctx.packet(pkt) {
+                    if !ctx.packet(super::stamp(frame, &mut clock)) {
                         return;
                     }
                 }

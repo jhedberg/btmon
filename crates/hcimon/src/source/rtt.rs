@@ -9,7 +9,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
-use hcimon_capture::{tty::Framer, Timestamp};
+use hcimon_capture::tty::Framer;
 use probe_rs::probe::list::Lister;
 use probe_rs::probe::DebugProbeSelector;
 use probe_rs::rtt::{Rtt, ScanRegion};
@@ -186,12 +186,7 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
                     last_data = Instant::now();
                     framer.push(&buf[..n]);
                     while let Some(frame) = framer.next_frame() {
-                        let mut pkt = frame.packet;
-                        pkt.ts = Some(match frame.ts32 {
-                            Some(t) => clock.wall(t),
-                            None => Timestamp::now(),
-                        });
-                        if !ctx.packet(pkt) {
+                        if !ctx.packet(super::stamp(frame, &mut clock)) {
                             return;
                         }
                     }
