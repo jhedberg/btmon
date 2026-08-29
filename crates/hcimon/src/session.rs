@@ -44,6 +44,16 @@ pub struct Ref {
 }
 
 impl Ref {
+    /// Wording for the link, e.g. `Response to` / `Completed by`.
+    pub fn what(&self) -> &'static str {
+        match self.kind {
+            LinkKind::ResponseTo => "Response to",
+            LinkKind::AnsweredBy => "Answered by",
+            LinkKind::Completes => "Completes",
+            LinkKind::CompletedBy => "Completed by",
+        }
+    }
+
     /// `1.234 ms` style text for the round-trip time.
     pub fn elapsed_text(&self) -> String {
         match self.elapsed_us {

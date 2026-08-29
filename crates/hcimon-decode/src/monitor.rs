@@ -321,6 +321,19 @@ mod tests {
     }
 
     #[test]
+    fn number_of_completed_packets_links_acl_tx() {
+        let mut ctx = Context::new();
+        // LE Read Buffer Size reply: 3 buffers of 27 bytes.
+        decode(&mut ctx, &pkt(Opcode::Event, 0, &[0x0e, 0x07, 0x01, 0x02, 0x20, 0x00, 0x1b, 0x00, 0x03]));
+        let tx = decode(&mut ctx, &pkt(Opcode::AclTx, 1_000, &[0x00, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00]));
+        let ncp = decode(&mut ctx, &pkt(Opcode::Event, 99_000, &[0x13, 0x05, 0x01, 0x00, 0x00, 0x01, 0x00]));
+        assert_eq!(ncp.links, vec![crate::Link { kind: LinkKind::Completes, frame: tx.frame, elapsed_us: Some(98_000) }]);
+        let lines = ncp.lines().join("\n");
+        assert!(lines.contains("Latency: 98 msec (98-98 msec ~98 msec)"), "{lines}");
+        assert!(lines.contains("Buffers: 0/3"), "{lines}");
+    }
+
+    #[test]
     fn att_response_links_to_request() {
         let mut ctx = Context::new();
         // Exchange MTU Request (TX) on handle 0, then the Response (RX).

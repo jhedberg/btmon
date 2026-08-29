@@ -24,7 +24,8 @@
 //! (command, event, acl, sco, iso, index, log, control, vendor),
 //! `dir` (tx, rx), `index` (controller index), `source`, `opcode`, `event`,
 //! `subevent`, `len`, `drops`, `ident` and `prio` (user logging), `response_to`
-//! and `rtt` (milliseconds, on packets that answer a request), `text`
+//! and `rtt` (milliseconds, on packets that answer a request), `completes` and
+//! `tx_latency` (on Number Of Completed Packets events), `text`
 //! (headline and every field), `headline`, and `error` (the packet has a
 //! decoding problem).  Layer names (`hci`, `l2cap`, `att`, `smp`, `sdp`,
 //! `rfcomm`, `avdtp`, `avctp`, `mgmt`, `log`) are true when present.
@@ -245,12 +246,15 @@ impl FieldIndex {
             _ => {}
         }
         for l in &d.links {
-            if l.kind == crate::LinkKind::ResponseTo {
-                ix.push("response_to", FieldValue::from_number(l.frame));
-                if let Some(us) = l.elapsed_us {
-                    let ms = us as f64 / 1000.0;
-                    ix.push("rtt", FieldValue { text: format!("{ms:.3} ms"), num: Some(ms), raw: None });
-                }
+            let (key_frame, key_ms) = match l.kind {
+                crate::LinkKind::ResponseTo => ("response_to", "rtt"),
+                crate::LinkKind::Completes => ("completes", "tx_latency"),
+                _ => continue,
+            };
+            ix.push(key_frame, FieldValue::from_number(l.frame));
+            if let Some(us) = l.elapsed_us {
+                let ms = us as f64 / 1000.0;
+                ix.push(key_ms, FieldValue { text: format!("{ms:.3} ms"), num: Some(ms), raw: None });
             }
         }
         for l in &d.layers {

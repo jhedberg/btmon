@@ -155,9 +155,10 @@ impl<W: Write> Printer<W> {
 
         // Generated fields, in Wireshark's bracket style.
         for l in &d.links {
-            if l.kind == hcimon_decode::LinkKind::ResponseTo {
+            if l.kind.is_back_reference() {
+                let what = if l.kind == hcimon_decode::LinkKind::Completes { "Completes" } else { "Response to" };
                 let rtt = l.elapsed_us.map(|us| format!(", {:.3} ms", us as f64 / 1000.0)).unwrap_or_default();
-                writeln!(self.out, "      [Response to frame #{}{rtt}]", l.frame)?;
+                writeln!(self.out, "      [{what} frame #{}{rtt}]", l.frame)?;
             }
         }
         let palette = self.palette;

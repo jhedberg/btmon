@@ -113,6 +113,7 @@ fn command_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> R
     } else {
         field!(out, "{} ncmd {}", text, ncmd);
     }
+    learn_acl_buffers(st, opcode, r.peek());
     out.nest(|o| {
         let mut params = Reader::new(r.rest());
         let res = return_params(st, opcode, &mut params, o);
@@ -337,13 +338,42 @@ fn role_change(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result
     Ok(())
 }
 
-fn number_of_completed_packets(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+fn number_of_completed_packets(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let n = u8_field("Num handles", r, out)?;
     for _ in 0..n {
-        handle(st, r, out)?;
-        u16_field("Count", r, out)?;
+        let h = handle(st, r, out)?;
+        let count = u16_field("Count", r, out)?;
+        // Controller-side TX latency of the packets this completes, as btmon shows it.
+        let latencies: Vec<i64> = st.complete_acl(h, count).into_iter().flatten().collect();
+        if let (Some(min), Some(max)) = (latencies.iter().min(), latencies.iter().max()) {
+            let avg = latencies.iter().sum::<i64>() / latencies.len() as i64;
+            field!(out, "Latency: {} msec ({}-{} msec ~{} msec)", avg / 1000, min / 1000, max / 1000, avg / 1000);
+        }
+        if let Some(total) = st.acl_buffers {
+            field!(out, "Buffers: {}/{}", st.acl_in_flight(), total);
+        }
     }
     Ok(())
+}
+
+/// Learn the controller's ACL buffer count from the buffer size replies.
+fn learn_acl_buffers(st: &mut IndexState, opcode: u16, params: &[u8]) {
+    let mut r = Reader::new(params);
+    let Ok(status) = r.u8() else { return };
+    if status != 0 {
+        return;
+    }
+    let n = match opcode {
+        super::cmd::LE_READ_BUFFER_SIZE | super::cmd::LE_READ_BUFFER_SIZE_V2 => r.u16().ok().and_then(|_| r.u8().ok()).map(|n| n as u16),
+        super::cmd::READ_BUFFER_SIZE => r.u16().ok().and_then(|_| r.u8().ok()).and_then(|_| r.u16().ok()),
+        _ => None,
+    };
+    match n {
+        // An LE controller reporting 0 uses the BR/EDR buffers.
+        Some(0) if opcode != super::cmd::READ_BUFFER_SIZE => {}
+        Some(n) => st.acl_buffers = Some(n),
+        None => {}
+    }
 }
 
 fn number_of_completed_data_blocks(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {

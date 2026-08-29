@@ -273,10 +273,8 @@ fn draw_details(frame: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::from(Span::styled(format!("  ⚠ {}", f.text), Style::default().fg(color))));
     }
     for r in &e.refs {
-        let (arrow, what) = match r.kind {
-            hcimon_decode::LinkKind::ResponseTo => ("↩", "Response to"),
-            hcimon_decode::LinkKind::AnsweredBy => ("↪", "Answered by"),
-        };
+        let arrow = if r.kind.is_back_reference() { "↩" } else { "↪" };
+        let what = r.what();
         let rtt = r.elapsed_text();
         let text = if rtt.is_empty() { format!("  {arrow} {what} packet {}  (m: jump)", r.seq) } else { format!("  {arrow} {what} packet {}, {rtt}  (m: jump)", r.seq) };
         lines.push(Line::from(Span::styled(text, Style::default().fg(Color::Green))));

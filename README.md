@@ -47,7 +47,10 @@ $ hcimon --tty /dev/serial/by-id/usb-SEGGER_J-Link_000682451005-if00 -p
     `att && handle == 0x1c`, `status != Success`, `opcode == "LE Set Scan Enable"`,
     `rssi < -70`, `rtt > 5`, `!log`, `error` (`e` in the UI, `-Y` on the command line);
   * *request/response links* with round-trip times for HCI commands, ATT,
-    L2CAP signaling and SDP (`m` jumps between the two, `rtt` is filterable);
+    L2CAP signaling and SDP (`m` jumps between the two, `rtt` is filterable),
+    and ACL completion tracking: each Number Of Completed Packets event is
+    linked to the packets it completes with the controller's TX latency and
+    the buffer occupancy (`tx_latency` is filterable);
   * *conversations* — every connection with peer, packet and byte counts and
     state, and `F` to follow the selected packet's connection;
   * *expert info* — decoding problems, non-success statuses, rejected
@@ -173,9 +176,14 @@ Design choices worth knowing about:
 * **Sources are threads behind a channel.** The UI never blocks on I/O, and
   adding a new transport means implementing one `spawn` function.
 * **Timestamps.** btsnoop files and the kernel socket carry wall-clock times;
-  the UART/RTT stream carries a free-running 100 µs tick.  Both are kept as
-  they are (`Timestamp::Wall` / `Timestamp::Monotonic`) and rendered as
-  offsets from the first packet by default, like btmon.
+  the UART/RTT stream carries a free-running 100 µs device tick.  Live
+  sources anchor the first tick at the host's clock and follow the device
+  tick from there (re-anchoring when the device reboots), so files written
+  from a board carry real times while keeping the device's timing precision.
+  Raw stream files read back later have no such anchor and are shown as
+  offsets (`Timestamp::Monotonic`).  Note that a blocking UART monitor delays
+  the host stack while it transmits, so round-trip times measured over the
+  UART include that overhead; RTT does not have this effect.
 
 ## Testing with Zephyr hardware
 

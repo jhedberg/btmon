@@ -103,6 +103,7 @@ pub fn collect(entries: &[Entry], buckets: usize) -> Stats {
         }
         for r in &e.refs {
             if r.kind == hcimon_decode::LinkKind::ResponseTo {
+                // Command/ATT/L2CAP/SDP round trips only; ACL completions are a different quantity.
                 if let Some(us) = r.elapsed_us {
                     let ms = us as f64 / 1000.0;
                     s.answered += 1;

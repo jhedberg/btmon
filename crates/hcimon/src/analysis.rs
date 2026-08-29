@@ -46,13 +46,13 @@ impl Loaded {
             let findings = expert::assess(&decoded, &packet, &index);
             let mut refs = Vec::new();
             for link in &decoded.links {
-                if link.kind != LinkKind::ResponseTo {
+                if !link.kind.is_back_reference() {
                     continue;
                 }
                 if let Some(&req) = frame_map.get(&(packet.index, link.frame)) {
-                    refs.push(Ref { kind: LinkKind::ResponseTo, seq: req, elapsed_us: link.elapsed_us });
+                    refs.push(Ref { kind: link.kind, seq: req, elapsed_us: link.elapsed_us });
                     if let Some(e) = entries.get_mut((req - 1) as usize) {
-                        e.refs.push(Ref { kind: LinkKind::AnsweredBy, seq, elapsed_us: link.elapsed_us });
+                        e.refs.push(Ref { kind: link.kind.reverse(), seq, elapsed_us: link.elapsed_us });
                     }
                 }
             }
@@ -128,9 +128,10 @@ impl Loaded {
         }
         let mut s = String::from_utf8_lossy(&buf).into_owned();
         // The printer already shows what this packet answers; add what answered it.
-        for r in e.refs.iter().filter(|r| r.kind == LinkKind::AnsweredBy) {
+        for r in e.refs.iter().filter(|r| !r.kind.is_back_reference()) {
             let rtt = r.elapsed_text();
-            let _ = writeln!(s, "      [Answered by packet #{}{}]", r.seq, if rtt.is_empty() { String::new() } else { format!(", {rtt}") });
+            let what = if r.kind == LinkKind::AnsweredBy { "Answered by" } else { "Completed by" };
+            let _ = writeln!(s, "      [{what} packet #{}{}]", r.seq, if rtt.is_empty() { String::new() } else { format!(", {rtt}") });
         }
         for f in &e.findings {
             let _ = writeln!(s, "      [{}: {}]", f.severity.name(), f.text);
@@ -245,6 +246,8 @@ pub const BUILTIN_FIELDS: &[(&str, &str)] = &[
     ("message", "user-logging text"),
     ("response_to", "frame of the request this packet answers"),
     ("rtt", "milliseconds between the request and this response"),
+    ("completes", "ACL packet completed by this Number Of Completed Packets event"),
+    ("tx_latency", "milliseconds the controller took to complete that ACL packet"),
     ("headline", "the one-line packet summary"),
     ("text", "headline plus every decoded line (use with contains)"),
     ("error", "true when the packet has a decoding problem"),

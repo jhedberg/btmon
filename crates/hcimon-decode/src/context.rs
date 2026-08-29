@@ -202,6 +202,10 @@ pub struct IndexState {
     pub pending_cmds: HashMap<u16, VecDeque<Pending>>,
     /// Device names learned from advertising data, EIR and remote name responses.
     pub names: HashMap<BdAddr, String>,
+    /// ACL packets sent to the controller that it has not yet reported as completed, per handle.
+    pub acl_outstanding: HashMap<u16, VecDeque<Pending>>,
+    /// Number of ACL data packets the controller can hold (from Read Buffer Size / LE Read Buffer Size).
+    pub acl_buffers: Option<u16>,
     /// Manufacturer-specific event prefix (Microsoft extension) if configured.
     pub msft_evt_prefix: Vec<u8>,
 }
@@ -264,6 +268,36 @@ impl IndexState {
         if let Some(p) = self.pending_cmds.get_mut(&opcode).and_then(|q| q.pop_front()) {
             self.link_to(p);
         }
+    }
+
+    /// Remember an ACL packet sent to the controller until it is reported completed.
+    pub fn push_acl_tx(&mut self, handle: u16) {
+        let p = self.pending();
+        let q = self.acl_outstanding.entry(handle).or_default();
+        while q.len() >= 64 {
+            q.pop_front();
+        }
+        q.push_back(p);
+    }
+
+    /// Complete `count` ACL packets on `handle`; returns the latencies (µs) of the completed ones.
+    pub fn complete_acl(&mut self, handle: u16, count: u16) -> Vec<Option<i64>> {
+        let mut out = Vec::new();
+        for _ in 0..count {
+            let Some(p) = self.acl_outstanding.get_mut(&handle).and_then(|q| q.pop_front()) else { break };
+            let elapsed_us = match (self.cur_ts, p.ts) {
+                (Some(now), Some(then)) => Some(now.micros_since(then)),
+                _ => None,
+            };
+            self.links.push(Link { kind: LinkKind::Completes, frame: p.frame, elapsed_us });
+            out.push(elapsed_us);
+        }
+        out
+    }
+
+    /// ACL packets currently in flight towards the controller.
+    pub fn acl_in_flight(&self) -> usize {
+        self.acl_outstanding.values().map(|q| q.len()).sum()
     }
 }
 

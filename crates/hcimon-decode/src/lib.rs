@@ -75,6 +75,27 @@ pub enum LinkKind {
     ResponseTo,
     /// This packet was answered by the referenced frame (filled in by the consumer).
     AnsweredBy,
+    /// This Number Of Completed Packets event completes the referenced ACL packet.
+    Completes,
+    /// This ACL packet was completed by the referenced event (filled in by the consumer).
+    CompletedBy,
+}
+
+impl LinkKind {
+    /// The kind recorded on the other packet of the pair.
+    pub fn reverse(self) -> LinkKind {
+        match self {
+            LinkKind::ResponseTo => LinkKind::AnsweredBy,
+            LinkKind::AnsweredBy => LinkKind::ResponseTo,
+            LinkKind::Completes => LinkKind::CompletedBy,
+            LinkKind::CompletedBy => LinkKind::Completes,
+        }
+    }
+
+    /// Whether this link points backwards, from an answer to what it answers.
+    pub fn is_back_reference(self) -> bool {
+        matches!(self, LinkKind::ResponseTo | LinkKind::Completes)
+    }
 }
 
 /// A reference from one packet to another, in per-controller frame numbers.

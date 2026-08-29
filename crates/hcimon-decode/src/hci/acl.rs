@@ -51,6 +51,9 @@ pub fn decode(ctx: &mut Context, pkt: &Packet, rx: bool) -> Decoded {
         return d;
     }
 
+    if !rx {
+        st.push_acl_tx(handle);
+    }
     let conn = st.conn_or_insert(handle, LinkType::Unknown);
     if conn.since_frame == 0 {
         conn.since_frame = frame;

@@ -70,15 +70,20 @@ pub fn write_digest(w: &mut impl Write, e: &Entry, first_ts: Option<Timestamp>) 
         line.push_str(inner);
     }
     for l in &e.decoded.links {
-        if l.kind == LinkKind::ResponseTo {
-            match l.elapsed_us {
-                Some(us) => {
-                    let _ = write!(line, " | rtt {:.3} ms to #{}", us as f64 / 1000.0, l.frame);
-                }
-                None => {
-                    let _ = write!(line, " | answers #{}", l.frame);
-                }
+        match (l.kind, l.elapsed_us) {
+            (LinkKind::ResponseTo, Some(us)) => {
+                let _ = write!(line, " | rtt {:.3} ms to #{}", us as f64 / 1000.0, l.frame);
             }
+            (LinkKind::ResponseTo, None) => {
+                let _ = write!(line, " | answers #{}", l.frame);
+            }
+            (LinkKind::Completes, Some(us)) => {
+                let _ = write!(line, " | completes #{} after {:.3} ms", l.frame, us as f64 / 1000.0);
+            }
+            (LinkKind::Completes, None) => {
+                let _ = write!(line, " | completes #{}", l.frame);
+            }
+            _ => {}
         }
     }
     for f in &e.findings {
@@ -147,10 +152,14 @@ pub fn write_jsonl(w: &mut impl Write, e: &Entry, first_ts: Option<Timestamp>, s
     let links: Vec<String> = d
         .links
         .iter()
-        .filter(|l| l.kind == LinkKind::ResponseTo)
-        .map(|l| match l.elapsed_us {
-            Some(us) => format!("{{\"response_to\":{},\"rtt_ms\":{:.3}}}", l.frame, us as f64 / 1000.0),
-            None => format!("{{\"response_to\":{}}}", l.frame),
+        .filter(|l| l.kind.is_back_reference())
+        .map(|l| {
+            let key = if l.kind == LinkKind::Completes { "completes" } else { "response_to" };
+            let ms = if l.kind == LinkKind::Completes { "tx_latency_ms" } else { "rtt_ms" };
+            match l.elapsed_us {
+                Some(us) => format!("{{\"{key}\":{},\"{ms}\":{:.3}}}", l.frame, us as f64 / 1000.0),
+                None => format!("{{\"{key}\":{}}}", l.frame),
+            }
         })
         .collect();
     let _ = write!(o, ",\"links\":[{}]", links.join(","));

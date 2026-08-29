@@ -16,7 +16,7 @@ use super::filter::{Category, Filter, LAYERS};
 use super::ui;
 use super::widgets::{flatten_tree, TextInput};
 use crate::session::{Entry, Ref, Session};
-use hcimon_decode::{LinkKind, Severity};
+use hcimon_decode::Severity;
 use crate::source::discovery::{self, ProbeCandidate, SerialCandidate};
 use crate::source::{Event as SourceEvent, SourceId, SourceKind};
 use crate::time::TimeMode;
@@ -301,13 +301,13 @@ impl App {
         }
         // Resolve request/response links to session numbers and tell the request too.
         for link in &entry.decoded.links {
-            if link.kind != LinkKind::ResponseTo {
+            if !link.kind.is_back_reference() {
                 continue;
             }
             let Some(&req_seq) = self.frame_map.get(&(entry.source, entry.packet.index, link.frame)) else { continue };
-            entry.refs.push(Ref { kind: LinkKind::ResponseTo, seq: req_seq, elapsed_us: link.elapsed_us });
+            entry.refs.push(Ref { kind: link.kind, seq: req_seq, elapsed_us: link.elapsed_us });
             if let Some(pos) = self.entry_pos(req_seq) {
-                self.entries[pos].refs.push(Ref { kind: LinkKind::AnsweredBy, seq: entry.seq, elapsed_us: link.elapsed_us });
+                self.entries[pos].refs.push(Ref { kind: link.kind.reverse(), seq: entry.seq, elapsed_us: link.elapsed_us });
             }
         }
         let show = self.filter.matches(&entry);
