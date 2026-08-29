@@ -106,8 +106,10 @@ fn structure(t: u8, value: &[u8], out: &mut Out) {
             o.hex(r.rest());
         }),
         Err(_) => {
+            // The structure is intact but not what the specification describes:
+            // the remote device's problem, so a warning rather than a decode error.
             let name = ad_type_name(t).unwrap_or("Unknown");
-            out.error(format!("{name}: malformed (len {})", value.len()));
+            out.unknown(format!("{name}: malformed (len {})", value.len()));
             out.nest(|o| {
                 o.hex(value);
             });
@@ -287,7 +289,14 @@ fn adv_interval_long(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
 
 fn le_device_address(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let a = r.bdaddr()?;
-    let t = r.u8()?;
+    // The address type octet is mandatory, but devices in the field omit it.
+    let Ok(t) = r.u8() else {
+        bdaddr_value("LE Bluetooth Device Address", 0x00, out, &a);
+        out.nest(|o| {
+            o.line("Address type octet missing (non-conforming)");
+        });
+        return Ok(());
+    };
     bdaddr_value("LE Bluetooth Device Address", t & 0x01, out, &a);
     if t & 0xfe != 0 {
         out.nest(|o| {
@@ -772,6 +781,8 @@ fn manufacturer(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let company = r.u16()?;
     match company_name(company) {
         Some(n) => field!(out, "Manufacturer Specific Data: {} ({})", n, company),
+        // 0xFFFF is reserved for tests and internal use, not an unknown vendor.
+        None if company == 0xffff => field!(out, "Manufacturer Specific Data: Reserved for testing (65535)"),
         None => out.unknown(format!("Manufacturer Specific Data: Unknown ({company})")),
     };
     let data = r.rest();
