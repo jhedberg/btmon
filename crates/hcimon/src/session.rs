@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use hcimon_decode::{decode, Context as DecodeContext, Decoded, FieldIndex, Options, Packet, PacketMeta, Query, Timestamp};
+use hcimon_decode::{decode, Context as DecodeContext, Decoded, FieldIndex, LinkKind, Options, Packet, PacketMeta, Query, Timestamp};
 use hcimon_capture::btsnoop;
 use crossbeam_channel::{unbounded, Receiver, RecvTimeoutError};
 
@@ -33,6 +33,24 @@ pub struct SessionConfig {
     pub filter: Option<Query>,
 }
 
+/// A reference to another packet of the session (request/response pairing).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ref {
+    pub kind: LinkKind,
+    pub seq: u64,
+    pub elapsed_us: Option<i64>,
+}
+
+impl Ref {
+    /// `1.234 ms` style text for the round-trip time.
+    pub fn elapsed_text(&self) -> String {
+        match self.elapsed_us {
+            Some(us) => format!("{:.3} ms", us as f64 / 1000.0),
+            None => String::new(),
+        }
+    }
+}
+
 /// A captured packet together with its decoding.
 #[derive(Debug, Clone)]
 pub struct Entry {
@@ -43,6 +61,8 @@ pub struct Entry {
     pub decoded: Decoded,
     /// Typed fields for filter expressions.
     pub index: FieldIndex,
+    /// Requests this packet answers and responses that answered it, in session numbers.
+    pub refs: Vec<Ref>,
 }
 
 pub struct Session {
@@ -163,7 +183,7 @@ impl Session {
         self.next_seq += 1;
         let label = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
         let index = FieldIndex::build(&decoded, &packet, PacketMeta { seq, source: &label });
-        Some(Entry { seq, source, packet, decoded, index })
+        Some(Entry { seq, source, packet, decoded, index, refs: Vec::new() })
     }
 
     pub fn flush_writer(&mut self) {

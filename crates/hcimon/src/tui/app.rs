@@ -14,7 +14,8 @@ use ratatui::DefaultTerminal;
 use super::filter::{Category, Filter, LAYERS};
 use super::ui;
 use super::widgets::{flatten_tree, TextInput};
-use crate::session::{Entry, Session};
+use crate::session::{Entry, Ref, Session};
+use hcimon_decode::LinkKind;
 use crate::source::discovery::{self, ProbeCandidate, SerialCandidate};
 use crate::source::{Event as SourceEvent, SourceId, SourceKind};
 use crate::time::TimeMode;
@@ -211,6 +212,8 @@ pub struct App {
     pub areas: Areas,
     pub dropped: u64,
     pub filtered_out: u64,
+    /// `(source, controller index, frame)` → session sequence number, for resolving links.
+    frame_map: HashMap<(SourceId, u16, u64), u64>,
     known_ports: HashSet<String>,
     last_discovery: Instant,
     should_quit: bool,
@@ -252,6 +255,7 @@ impl App {
             areas: Areas::default(),
             dropped: 0,
             filtered_out: 0,
+            frame_map: HashMap::new(),
             known_ports,
             last_discovery: Instant::now(),
             should_quit: false,
@@ -275,8 +279,27 @@ impl App {
 
     // ----- packet store -----------------------------------------------------------------
 
-    fn push_entry(&mut self, entry: Entry) {
+    /// Position of the entry with sequence number `seq` in `entries`.
+    fn entry_pos(&self, seq: u64) -> Option<usize> {
+        self.entries.binary_search_by_key(&seq, |e| e.seq).ok()
+    }
+
+    fn push_entry(&mut self, mut entry: Entry) {
         self.source_info_mut(entry.source).packets += 1;
+        if entry.decoded.frame > 0 {
+            self.frame_map.insert((entry.source, entry.packet.index, entry.decoded.frame), entry.seq);
+        }
+        // Resolve request/response links to session numbers and tell the request too.
+        for link in &entry.decoded.links {
+            if link.kind != LinkKind::ResponseTo {
+                continue;
+            }
+            let Some(&req_seq) = self.frame_map.get(&(entry.source, entry.packet.index, link.frame)) else { continue };
+            entry.refs.push(Ref { kind: LinkKind::ResponseTo, seq: req_seq, elapsed_us: link.elapsed_us });
+            if let Some(pos) = self.entry_pos(req_seq) {
+                self.entries[pos].refs.push(Ref { kind: LinkKind::AnsweredBy, seq: entry.seq, elapsed_us: link.elapsed_us });
+            }
+        }
         let show = self.filter.matches(&entry);
         if !show {
             self.filtered_out += 1;
@@ -296,6 +319,9 @@ impl App {
 
     fn drop_oldest(&mut self, n: usize) {
         let n = n.min(self.entries.len());
+        for e in &self.entries[..n] {
+            self.frame_map.remove(&(e.source, e.packet.index, e.decoded.frame));
+        }
         self.entries.drain(..n);
         self.dropped += n as u64;
         self.visible.retain(|&i| i >= n);
@@ -327,6 +353,7 @@ impl App {
 
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.frame_map.clear();
         self.visible.clear();
         self.selected = None;
         self.list_offset = 0;
@@ -422,6 +449,25 @@ impl App {
             Some(row.path.clone())
         } else {
             None
+        }
+    }
+
+    /// Jump to the packet the selected one is linked to (its request or its response).
+    fn jump_to_linked(&mut self) {
+        let Some(e) = self.selected_entry() else { return };
+        let Some(r) = e.refs.first() else {
+            self.set_message("no linked request/response for this packet", false);
+            return;
+        };
+        let target = r.seq;
+        match self.visible.iter().position(|&i| self.entries[i].seq == target) {
+            Some(vi) => {
+                self.selected = Some(vi);
+                self.follow = false;
+                self.dirty = true;
+            }
+            None if self.entry_pos(target).is_some() => self.set_message(format!("packet {target} is hidden by the current filter"), false),
+            None => self.set_message(format!("packet {target} is no longer in memory"), false),
         }
     }
 
@@ -547,6 +593,7 @@ impl App {
             }
             KeyCode::Char('n') => self.find_next(true),
             KeyCode::Char('N') => self.find_next(false),
+            KeyCode::Char('m') => self.jump_to_linked(),
             KeyCode::Char('f') => self.popup = Some(Popup::Filter { cursor: 0 }),
             KeyCode::Char('a') => self.popup = Some(Popup::AddSource(AddSource::new(self.default_baud))),
             KeyCode::Char('s') => self.popup = Some(Popup::Sources { cursor: 0 }),

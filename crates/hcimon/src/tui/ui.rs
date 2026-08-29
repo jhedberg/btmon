@@ -256,6 +256,15 @@ fn draw_details(frame: &mut Frame, app: &mut App, area: Rect) {
         }
     }
     lines.push(Line::from(vec![Span::styled(d.headline(), packet_color(d).add_modifier(Modifier::BOLD)), Span::styled(trailer, Style::default().fg(Color::Yellow))]));
+    for r in &e.refs {
+        let (arrow, what) = match r.kind {
+            hcimon_decode::LinkKind::ResponseTo => ("↩", "Response to"),
+            hcimon_decode::LinkKind::AnsweredBy => ("↪", "Answered by"),
+        };
+        let rtt = r.elapsed_text();
+        let text = if rtt.is_empty() { format!("  {arrow} {what} packet {}  (m: jump)", r.seq) } else { format!("  {arrow} {what} packet {}, {rtt}  (m: jump)", r.seq) };
+        lines.push(Line::from(Span::styled(text, Style::default().fg(Color::Green))));
+    }
 
     let rows = flatten_tree(&d.fields, &app.collapsed);
     for row in &rows {
@@ -315,6 +324,7 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
                 ("?", "help"),
                 ("/", "search"),
                 ("e", "expr"),
+                ("m", "linked"),
                 ("f", "filter"),
                 ("a", "add source"),
                 ("s", "sources"),
@@ -537,6 +547,7 @@ Navigation
   Home/End g/G   first / last (End resumes following new packets)
   Enter/→        open details           Tab         switch list/details
   ←              collapse / back        Enter/space toggle node in details
+  m              jump to the linked request / response (round-trip time in details)
 
 Display
   t              cycle time display: offset, wall time, date, none

@@ -153,6 +153,13 @@ impl<W: Write> Printer<W> {
             )?;
         }
 
+        // Generated fields, in Wireshark's bracket style.
+        for l in &d.links {
+            if l.kind == hcimon_decode::LinkKind::ResponseTo {
+                let rtt = l.elapsed_us.map(|us| format!(", {:.3} ms", us as f64 / 1000.0)).unwrap_or_default();
+                writeln!(self.out, "      [Response to frame #{}{rtt}]", l.frame)?;
+            }
+        }
         let palette = self.palette;
         let mut res = Ok(());
         hcimon_decode::render_lines(&d.fields, d.indent, |indent, node| {
