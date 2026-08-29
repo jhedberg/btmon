@@ -3,6 +3,7 @@
 mod app;
 mod conversations;
 mod filter;
+mod stats;
 mod ui;
 mod widgets;
 

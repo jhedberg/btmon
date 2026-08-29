@@ -5,7 +5,7 @@ use hcimon_capture::INDEX_NONE;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Sparkline, Wrap};
 use ratatui::Frame;
 
 use super::app::{AddKind, App, Focus, LayoutMode, Popup, SourceState};
@@ -111,6 +111,10 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     let (errs, warns, _) = app.expert_counts();
     if errs > 0 || warns > 0 {
         right.push_str(&format!(" · {errs} err {warns} warn (!)"));
+    }
+    let rate = app.live_rate();
+    if rate > 0 {
+        right.push_str(&format!(" · {rate} pkt/s"));
     }
     if app.paused {
         right.push_str(" · PAUSED");
@@ -340,6 +344,7 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
                 ("F", "follow"),
                 ("C", "conns"),
                 ("!", "expert"),
+                ("S", "stats"),
                 ("f", "filter"),
                 ("a", "add source"),
                 ("s", "sources"),
@@ -391,6 +396,7 @@ fn draw_popup(frame: &mut Frame, app: &App, popup: &Popup, area: Rect) {
         Popup::Sources { cursor } => draw_sources(frame, app, area, *cursor),
         Popup::Conversations { cursor, rows } => draw_conversations(frame, app, area, *cursor, rows),
         Popup::Expert { cursor } => draw_expert(frame, app, area, *cursor),
+        Popup::Stats(stats) => draw_stats(frame, area, stats),
         Popup::AddSource(add) => draw_add_source(frame, area, add),
     }
 }
@@ -507,6 +513,58 @@ fn draw_conversations(frame: &mut Frame, app: &App, area: Rect, cursor: usize, r
     let rect = centered_rect(area, 92, h);
     frame.render_widget(Clear, rect);
     frame.render_widget(Paragraph::new(lines).block(Block::bordered().title(" Conversations ")), rect);
+}
+
+fn draw_stats(frame: &mut Frame, area: Rect, s: &super::stats::Stats) {
+    use super::stats::span_text;
+    let bold = Style::default().add_modifier(Modifier::BOLD);
+    let dim = Style::default().fg(Color::DarkGray);
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(vec![
+        Span::styled(format!(" {} packets", s.total), bold),
+        Span::styled(format!("  over {}", span_text(s.span_us)), dim),
+        Span::styled(format!("   {} errors, {} warnings, {} notes", s.findings.0, s.findings.1, s.findings.2), dim),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(" By type", bold)));
+    for (name, n, bytes) in &s.kinds {
+        lines.push(Line::from(format!("   {name:<16} {n:>7}   {bytes:>9} B")));
+    }
+    if !s.layers.is_empty() {
+        lines.push(Line::from(Span::styled(" Protocols", bold)));
+        let l: Vec<String> = s.layers.iter().map(|(n, c)| format!("{n} {c}")).collect();
+        lines.push(Line::from(format!("   {}", l.join("  ·  "))));
+    }
+    if s.answered > 0 {
+        lines.push(Line::from(Span::styled(" Request/response", bold)));
+        lines.push(Line::from(format!("   {} answered   avg {:.3} ms   max {:.3} ms", s.answered, s.avg_rtt_ms, s.max_rtt_ms)));
+    }
+    let cols = [("Commands", &s.top_commands), ("Events", &s.top_events), ("ATT", &s.top_att)];
+    let rows = cols.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
+    if rows > 0 {
+        lines.push(Line::from(Span::styled(format!(" {:<38}{:<38}{}", "Top commands", "Top events", "Top ATT"), bold)));
+        for i in 0..rows {
+            let cell = |v: &Vec<(String, u64)>| v.get(i).map(|(n, c)| format!("{:>5} {}", c, truncate(n, 30))).unwrap_or_default();
+            lines.push(Line::from(format!(" {:<38}{:<38}{}", cell(cols[0].1), cell(cols[1].1), cell(cols[2].1))));
+        }
+    }
+    lines.push(Line::from(""));
+    let max = s.rate.iter().copied().max().unwrap_or(0);
+    lines.push(Line::from(Span::styled(
+        format!(" Packets over time ({} per bar, peak {} per bar)", span_text(s.bucket_us), max),
+        bold,
+    )));
+    let spark_h = 4u16;
+    let h = (lines.len() as u16 + spark_h + 3).min(area.height);
+    let rect = centered_rect(area, area.width.saturating_sub(6).min(118), h);
+    frame.render_widget(Clear, rect);
+    let block = Block::bordered().title(" Statistics (any key to close) ");
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+    let [text_area, spark_area] = Layout::vertical([Constraint::Length(lines.len() as u16), Constraint::Length(spark_h)]).areas(inner);
+    frame.render_widget(Paragraph::new(lines), text_area);
+    let spark = Sparkline::default().data(&s.rate).style(Style::default().fg(Color::Cyan));
+    frame.render_widget(spark, Rect { x: spark_area.x + 3, width: spark_area.width.saturating_sub(4), ..spark_area });
 }
 
 fn draw_expert(frame: &mut Frame, app: &App, area: Rect, cursor: usize) {
@@ -640,6 +698,7 @@ Navigation
   F              follow the selected packet's connection (again to stop)
   C              conversations: every connection handle with peer, counts, state
   !              expert info: errors, non-success statuses, rejects, disconnects
+  S              statistics: packets by type, top commands/events/ATT, rates, RTT
 
 Display
   t              cycle time display: offset, wall time, date, none

@@ -1,6 +1,6 @@
 //! Application state and event loop of the interactive UI.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -77,6 +77,7 @@ pub enum Popup {
     Expr(TextInput),
     Conversations { cursor: usize, rows: Vec<Conversation> },
     Expert { cursor: usize },
+    Stats(super::stats::Stats),
     Message { title: String, text: String },
 }
 
@@ -219,6 +220,8 @@ pub struct App {
     frame_map: HashMap<(SourceId, u16, u64), u64>,
     /// Packets with expert findings: `(seq, severity)`, in arrival order.
     pub experts: Vec<(u64, Severity)>,
+    /// Arrival times of recent packets, for the live rate in the header.
+    arrivals: VecDeque<Instant>,
     known_ports: HashSet<String>,
     last_discovery: Instant,
     should_quit: bool,
@@ -262,6 +265,7 @@ impl App {
             filtered_out: 0,
             frame_map: HashMap::new(),
             experts: Vec::new(),
+            arrivals: VecDeque::new(),
             known_ports,
             last_discovery: Instant::now(),
             should_quit: false,
@@ -313,6 +317,7 @@ impl App {
         if let Some(f) = entry.findings.first() {
             self.experts.push((entry.seq, f.severity));
         }
+        self.arrivals.push_back(Instant::now());
         self.entries.push(entry);
         if self.entries.len() > self.session.config.max_packets {
             self.drop_oldest(self.session.config.max_packets / 10);
@@ -502,6 +507,12 @@ impl App {
         }
     }
 
+    /// Packets that arrived during the last second.
+    pub fn live_rate(&self) -> usize {
+        let cutoff = Instant::now() - Duration::from_secs(1);
+        self.arrivals.iter().rev().take_while(|t| **t >= cutoff).count()
+    }
+
     /// Counts of packets with error / warning / note findings.
     pub fn expert_counts(&self) -> (usize, usize, usize) {
         let mut c = (0, 0, 0);
@@ -660,6 +671,10 @@ impl App {
             KeyCode::Char('F') => self.follow_selected(),
             KeyCode::Char('C') => self.popup = Some(Popup::Conversations { cursor: 0, rows: conversations::collect(&self.entries) }),
             KeyCode::Char('!') => self.popup = Some(Popup::Expert { cursor: self.experts.len().saturating_sub(1) }),
+            KeyCode::Char('S') => {
+                let width = (self.areas.list.width as usize).saturating_sub(14).clamp(20, 100);
+                self.popup = Some(Popup::Stats(super::stats::collect(&self.entries, width)));
+            }
             KeyCode::Char('f') => self.popup = Some(Popup::Filter { cursor: 0 }),
             KeyCode::Char('a') => self.popup = Some(Popup::AddSource(AddSource::new(self.default_baud))),
             KeyCode::Char('s') => self.popup = Some(Popup::Sources { cursor: 0 }),
@@ -754,7 +769,7 @@ impl App {
     fn handle_popup_key(&mut self, key: KeyEvent) {
         let Some(popup) = self.popup.take() else { return };
         match popup {
-            Popup::Help | Popup::Message { .. } => {
+            Popup::Help | Popup::Message { .. } | Popup::Stats(_) => {
                 // Any key closes.
             }
             Popup::Search(mut input) => match key.code {
@@ -1048,6 +1063,13 @@ impl App {
     }
 
     fn tick(&mut self) {
+        let cutoff = Instant::now() - Duration::from_secs(2);
+        while self.arrivals.front().is_some_and(|t| *t < cutoff) {
+            self.arrivals.pop_front();
+        }
+        if !self.arrivals.is_empty() {
+            self.dirty = true;
+        }
         if let Some((t, _, _)) = &self.message {
             if t.elapsed() > MESSAGE_TTL {
                 self.message = None;
