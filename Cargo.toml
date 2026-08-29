@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/hcimon-capture",
+    "crates/hcimon-decode",
 ]
 
 [workspace.package]
@@ -12,6 +13,7 @@ authors = ["Johan Hedberg <johan.hedberg@gmail.com>"]
 
 [workspace.dependencies]
 hcimon-capture = { path = "crates/hcimon-capture", version = "0.2.0" }
+hcimon-decode = { path = "crates/hcimon-decode", version = "0.2.0" }
 
 anyhow = "1.0"
 clap = { version = "4.6", features = ["derive", "wrap_help"] }

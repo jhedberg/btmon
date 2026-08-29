@@ -10,6 +10,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hcimon-decode"
+version = "0.2.0"
+dependencies = [
+ "hcimon-capture",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"

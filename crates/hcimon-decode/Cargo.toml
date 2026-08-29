@@ -1,0 +1,10 @@
+[package]
+name = "hcimon-decode"
+description = "Bluetooth HCI / L2CAP / ATT / SMP packet decoders producing a renderable field tree"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+hcimon-capture.workspace = true
