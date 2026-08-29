@@ -1017,7 +1017,7 @@ mod tests {
         assert_eq!(
             l,
             [
-                "LE Bluetooth Device Address: 00:1A:7D:DA:71:13 (OUI 00-1A-7D)",
+                "LE Bluetooth Device Address: 00:1A:7D:DA:71:13 (cyber-blue(HK)Ltd)",
                 "LE Role: Only Peripheral (0x00)",
                 "Advertising Interval: 100.000 msec (0x00a0)",
             ]

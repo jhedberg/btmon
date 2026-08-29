@@ -200,6 +200,8 @@ pub struct IndexState {
     pub links: Vec<Link>,
     /// Commands awaiting Command Complete / Command Status, per opcode.
     pub pending_cmds: HashMap<u16, VecDeque<Pending>>,
+    /// Device names learned from advertising data, EIR and remote name responses.
+    pub names: HashMap<BdAddr, String>,
     /// Manufacturer-specific event prefix (Microsoft extension) if configured.
     pub msft_evt_prefix: Vec<u8>,
 }

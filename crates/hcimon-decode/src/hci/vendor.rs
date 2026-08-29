@@ -925,7 +925,7 @@ mod tests {
         assert_eq!(rsp_lines(&mut st, OP | 0x0005, &[0x0c]), ["Status: Command Disallowed (0x0c)"]);
         assert_eq!(
             cmd_lines(&mut st, OP | 0x0006, &[0x13, 0x71, 0xda, 0x7d, 0x1a, 0x00]),
-            ["Address: 00:1A:7D:DA:71:13 (OUI 00-1A-7D)"]
+            ["Address: 00:1A:7D:DA:71:13 (cyber-blue(HK)Ltd)"]
         );
         assert_eq!(cmd_lines(&mut st, OP | 0x0007, &[0x01, 0x00]), ["Trace: Enabled (0x01)", "Type: HCI events (0x00)"]);
         assert_eq!(cmd_lines(&mut st, OP | 0x000d, &[0x01]), ["Scan request reports: Enabled (0x01)"]);
@@ -1189,7 +1189,7 @@ mod tests {
                 "Zephyr Mesh Scanning Report (0xf0|0x01)",
                 "  Num reports: 1",
                 "  Address type: Public (0x00)",
-                "  Address: 00:1A:7D:DA:71:13 (OUI 00-1A-7D)",
+                "  Address: 00:1A:7D:DA:71:13 (cyber-blue(HK)Ltd)",
                 "  Channel: 37",
                 "  RSSI: -45 dBm (0xd3)",
                 "  Instant: 16",

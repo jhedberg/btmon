@@ -77,12 +77,127 @@ pub fn decode(ctx: &mut Context, pkt: &Packet) -> Decoded {
     };
     d.frame = frame;
     if pkt.index != INDEX_NONE {
-        d.links = std::mem::take(&mut ctx.index_mut(pkt.index).links);
+        let st = ctx.index_mut(pkt.index);
+        d.links = std::mem::take(&mut st.links);
+        names::learn_and_annotate(st, &mut d);
     }
     if pkt.opcode == Opcode::DelIndex {
         ctx.remove_index(pkt.index);
     }
     d
+}
+
+/// Device name resolution: learn names from the decoded tree and show them next to addresses.
+mod names {
+    use super::*;
+    use crate::context::IndexState;
+    use crate::tree::Node;
+
+    fn parse_addr(s: &str) -> Option<BdAddr> {
+        let b = s.as_bytes();
+        if b.len() < 17 {
+            return None;
+        }
+        let mut out = [0u8; 6];
+        for i in 0..6 {
+            let chunk = &s[i * 3..i * 3 + 2];
+            out[5 - i] = u8::from_str_radix(chunk, 16).ok()?;
+            if i < 5 && b[i * 3 + 2] != b':' {
+                return None;
+            }
+        }
+        Some(BdAddr(out))
+    }
+
+    /// Address found in a `... : XX:XX:XX:XX:XX:XX ...` line, with the offset just past it.
+    fn find_addr(text: &str) -> Option<(BdAddr, usize)> {
+        let b = text.as_bytes();
+        let mut i = 0;
+        while i + 17 <= b.len() {
+            if b[i].is_ascii_hexdigit() && (i == 0 || !b[i - 1].is_ascii_hexdigit()) {
+                if let Some(a) = parse_addr(&text[i..i + 17]) {
+                    if i + 17 == b.len() || !b[i + 17].is_ascii_hexdigit() {
+                        return Some((a, i + 17));
+                    }
+                }
+            }
+            i += 1;
+        }
+        None
+    }
+
+    fn name_of(text: &str) -> Option<&str> {
+        for prefix in ["Name (complete): ", "Name (short): ", "Name: ", "Remote name: ", "Broadcast Name: "] {
+            if let Some(n) = text.strip_prefix(prefix) {
+                let n = n.trim();
+                if !n.is_empty() {
+                    return Some(n);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn learn_and_annotate(st: &mut IndexState, d: &mut Decoded) {
+        // Learn: a name line refers to the most recent address seen above it.
+        let mut last_addr: Option<BdAddr> = None;
+        let mut learned: Vec<(BdAddr, String)> = Vec::new();
+        for n in &d.fields {
+            n.walk(0, &mut |_, node| {
+                if let Some((a, _)) = find_addr(&node.text) {
+                    if !a.is_zero() {
+                        last_addr = Some(a);
+                    }
+                }
+                if let (Some(name), Some(a)) = (name_of(&node.text), last_addr) {
+                    learned.push((a, name.to_string()));
+                }
+            });
+        }
+        for (a, name) in learned {
+            st.names.insert(a, name);
+        }
+        if st.names.is_empty() {
+            return;
+        }
+        // Annotate: append the known name after every address.
+        fn annotate(node: &mut Node, names: &std::collections::HashMap<BdAddr, String>) {
+            if let Some((a, end)) = find_addr(&node.text) {
+                if let Some(name) = names.get(&a) {
+                    let quoted = format!(" \"{name}\"");
+                    if !node.text.contains(&quoted) {
+                        // Insert after the address and any `(qualifier)` that follows it;
+                        // vendor names may themselves contain parentheses.
+                        let rest = &node.text[end..];
+                        let mut insert_at = end;
+                        if rest.starts_with(" (") {
+                            let mut depth = 0usize;
+                            for (i, c) in rest.char_indices() {
+                                match c {
+                                    '(' => depth += 1,
+                                    ')' => {
+                                        depth -= 1;
+                                        if depth == 0 {
+                                            insert_at = end + i + 1;
+                                            break;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        node.text.insert_str(insert_at, &quoted);
+                    }
+                }
+            }
+            for c in &mut node.children {
+                annotate(c, names);
+            }
+        }
+        for n in &mut d.fields {
+            annotate(n, &st.names);
+        }
+    }
 }
 
 fn new_index(ctx: &mut Context, pkt: &Packet) -> Decoded {
@@ -208,6 +323,25 @@ mod tests {
         let req = decode(&mut ctx, &pkt(Opcode::AclTx, 10, &[0x00, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00]));
         let rsp = decode(&mut ctx, &pkt(Opcode::AclRx, 2_010, &[0x00, 0x20, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x03, 0x40, 0x00]));
         assert_eq!(rsp.links, vec![crate::Link { kind: LinkKind::ResponseTo, frame: req.frame, elapsed_us: Some(2_000) }]);
+    }
+
+    #[test]
+    fn names_are_learned_from_advertising_reports() {
+        let mut ctx = Context::new();
+        // LE Advertising Report: 1 report, ADV_IND, public 00:1A:7D:DA:71:13, AD = Complete Local Name "Zephyr".
+        let mut data = vec![0x3e, 0x00, 0x02, 0x01, 0x00, 0x00, 0x13, 0x71, 0xda, 0x7d, 0x1a, 0x00];
+        let ad = [0x07u8, 0x09, b'Z', b'e', b'p', b'h', b'y', b'r'];
+        data.push(ad.len() as u8);
+        data.extend_from_slice(&ad);
+        data.push(0xd3);
+        data[1] = (data.len() - 2) as u8;
+        let rep = decode(&mut ctx, &pkt(Opcode::Event, 0, &data));
+        let lines = rep.lines().join("\n");
+        assert!(lines.contains("Address: 00:1A:7D:DA:71:13 (cyber-blue(HK)Ltd) \"Zephyr\""), "{lines}");
+        // A later LE Connection Complete to the same address is annotated with the name.
+        let cc = decode(&mut ctx, &pkt(Opcode::Event, 1, &[0x3e, 0x13, 0x01, 0x00, 0x40, 0x00, 0x00, 0x00, 0x13, 0x71, 0xda, 0x7d, 0x1a, 0x00, 0x18, 0x00, 0x00, 0x00, 0x2a, 0x00, 0x00]));
+        let lines = cc.lines().join("\n");
+        assert!(lines.contains("Peer address: 00:1A:7D:DA:71:13 (cyber-blue(HK)Ltd) \"Zephyr\""), "{lines}");
     }
 
     #[test]

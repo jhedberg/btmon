@@ -655,7 +655,7 @@ mod tests {
     use crate::tree::render_lines;
 
     const ADDR: [u8; 6] = [0x03, 0x32, 0x07, 0xdc, 0x1b, 0x00];
-    const ADDR_TEXT: &str = "Address: 00:1B:DC:07:32:03 (OUI 00-1B-DC)";
+    const ADDR_TEXT: &str = "Address: 00:1B:DC:07:32:03 (Vencer Co., Ltd.)";
 
     fn decode(st: &mut IndexState, code: u8, data: &[u8]) -> Out {
         let mut out = Out::new();

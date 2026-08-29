@@ -2154,7 +2154,7 @@ mod tests {
         assert_eq!(
             lines,
             [
-                "Address: 00:1A:7D:DA:71:13 (OUI 00-1A-7D)",
+                "Address: 00:1A:7D:DA:71:13 (cyber-blue(HK)Ltd)",
                 "Packet type: 0xcc18",
                 "  DM1 may be used",
                 "  DH1 may be used",
@@ -2316,7 +2316,7 @@ mod tests {
         let mut r = Reader::new(&[0x00, 0x13, 0x71, 0xda, 0x7d, 0x1a, 0x00]);
         assert!(return_params(&mut st, cmd::READ_BD_ADDR, &mut r, &mut out).unwrap());
         assert_eq!(st.addr, BdAddr([0x13, 0x71, 0xda, 0x7d, 0x1a, 0x00]));
-        assert_eq!(flatten(out.roots())[1], "Address: 00:1A:7D:DA:71:13 (OUI 00-1A-7D)");
+        assert_eq!(flatten(out.roots())[1], "Address: 00:1A:7D:DA:71:13 (cyber-blue(HK)Ltd)");
     }
 
     #[test]

@@ -217,6 +217,7 @@ pub fn bdaddr_typed(label: &str, addr_type: u8, r: &mut Reader<'_>, out: &mut Ou
 
 pub fn bdaddr_value(label: &str, addr_type: u8, out: &mut Out, a: &BdAddr) {
     match addr_type {
+        _ if a.is_zero() => field!(out, "{}: {}", label, a),
         0x00 | 0x02 => field!(out, "{}: {} ({})", label, a, oui_str(a)),
         0x01 | 0x03 => match a.msb2() {
             0b00 => field!(out, "{}: {} (Non-Resolvable)", label, a),
@@ -247,12 +248,14 @@ pub fn peer_addr_labelled(type_label: &str, addr_label: &str, r: &mut Reader<'_>
     Ok((t, a))
 }
 
-/// Organisation name derived from the OUI (upper three bytes) of a public address.
-///
-/// No OUI database is bundled; the text is a placeholder that keeps the btmon
-/// layout (`Address: ... (OUI 00-1A-7D)`).
+/// Organisation registered for the OUI (upper three bytes) of a public address,
+/// falling back to the prefix itself: `Intel Corporate` / `OUI 00-1A-7D`.
 pub fn oui_str(a: &BdAddr) -> String {
-    format!("OUI {:02X}-{:02X}-{:02X}", a.0[5], a.0[4], a.0[3])
+    let prefix = ((a.0[5] as u32) << 16) | ((a.0[4] as u32) << 8) | a.0[3] as u32;
+    match crate::assigned::oui_name(prefix) {
+        Some(n) => n.to_string(),
+        None => format!("OUI {:02X}-{:02X}-{:02X}", a.0[5], a.0[4], a.0[3]),
+    }
 }
 
 /// `Enabled` / `Disabled`.

@@ -1381,7 +1381,7 @@ mod tests {
                 "RSSI: -45 dBm (0xd3)",
                 "Periodic advertising interval: 0.000 msec (0x0000)",
                 "Direct address type: Public (0x00)",
-                "Direct address: 00:00:00:00:00:00 (OUI 00-00-00)",
+                "Direct address: 00:00:00:00:00:00",
                 "Data length: 0",
             ]
         );
@@ -1467,7 +1467,7 @@ mod tests {
         let lines = texts(&nodes);
         assert_eq!(lines[2], "Role: Peripheral (0x01)");
         assert_eq!(lines[3], "Peer address type: Random (0x01)");
-        assert_eq!(lines[5], "Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)");
+        assert_eq!(lines[5], "Local resolvable private address: 00:00:00:00:00:00");
         assert_eq!(lines[10], "Central clock accuracy: 250 ppm (0x01)");
         assert_eq!(lines[11], "Advertising handle: None (0xff)");
         assert_eq!(lines[12], "Sync handle: None (0xffff)");
