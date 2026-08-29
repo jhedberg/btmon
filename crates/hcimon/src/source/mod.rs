@@ -66,12 +66,14 @@ impl SourceKind {
 /// Ticks are not monotonic in the stream: Zephyr stamps log records when
 /// they are created and sends them later, so a record may carry a tick up to
 /// a second or so older than its predecessor.  Those keep the anchor.  The
-/// clock re-anchors when the device announces a reboot (New Index) or when
-/// the tick jumps back by more than [`REBOOT_JUMP`]; a wrap of the 32-bit
-/// counter near its maximum is carried into the next epoch.  Sources also
-/// call [`TickClock::reset`] on New Index / Open Index records, which a
-/// rebooting device sends first (the very first frame after a reboot is
-/// often cut, so either record counts).
+/// clock re-anchors when the tick jumps back by more than [`REBOOT_JUMP`],
+/// or by any amount on a record that announces a boot (New Index / Open
+/// Index, which sources flag with [`TickClock::reboot_announced`]; the very
+/// first frame after a reboot is often cut, so either record counts).  A
+/// wrap of the 32-bit counter near its maximum is carried into the next
+/// epoch.  Re-anchoring happens only when the tick really did go backwards:
+/// every anchor takes the host-side delay of that one frame into the
+/// timeline, so an Open Index following New Index must not anchor again.
 #[derive(Debug, Default)]
 pub struct TickClock {
     anchor_wall_us: i64,
@@ -79,6 +81,7 @@ pub struct TickClock {
     epoch: u64,
     high_water: u64,
     anchored: bool,
+    reboot_hint: bool,
 }
 
 /// Backwards jump (in 100 µs ticks) taken as a device reboot: 5 s, well above
@@ -90,8 +93,13 @@ impl TickClock {
         Self::default()
     }
 
-    /// Forget the anchor: the next tick is stamped with the host's clock.
-    pub fn reset(&mut self) {
+    /// The next tick belongs to a record announcing a boot: if it is smaller
+    /// than what was seen before, the device's clock started over.
+    pub fn reboot_announced(&mut self) {
+        self.reboot_hint = true;
+    }
+
+    fn restart(&mut self) {
         self.anchored = false;
         self.epoch = 0;
         self.high_water = 0;
@@ -100,13 +108,14 @@ impl TickClock {
     pub fn wall(&mut self, tick100us: u32) -> Timestamp {
         let now = Timestamp::now().micros();
         let raw = tick100us as u64;
+        let announced = std::mem::take(&mut self.reboot_hint);
         if self.anchored {
             if raw + REBOOT_JUMP < self.high_water && self.high_water > u32::MAX as u64 - REBOOT_JUMP {
                 // Counter wrapped (the previous ticks were near the maximum).
                 self.epoch += 1u64 << 32;
                 self.high_water = raw;
-            } else if raw + REBOOT_JUMP < self.high_water {
-                self.reset();
+            } else if raw + REBOOT_JUMP < self.high_water || (announced && raw < self.high_water) {
+                self.restart();
             }
         }
         let tick = raw + self.epoch;
@@ -131,8 +140,8 @@ pub const QUIET_RESYNC: Duration = Duration::from_millis(300);
 pub fn stamp(frame: Frame, clock: &mut TickClock) -> Packet {
     let mut pkt = frame.packet;
     if matches!(pkt.opcode, Opcode::NewIndex | Opcode::OpenIndex) {
-        // The device announced a (re)boot: its tick starts over.
-        clock.reset();
+        // Sent first after a (re)boot; the clock re-anchors if the tick restarted.
+        clock.reboot_announced();
     }
     pkt.ts = Some(match frame.ts32 {
         Some(t) => clock.wall(t),
@@ -319,11 +328,21 @@ mod tests {
         let a = c.wall(150_000).micros();
         let b = c.wall(10).micros();
         assert!(b >= a - 1_000_000, "re-anchored near the host clock, not 500 s in the past");
-        // An explicit reset (New Index) does the same for small ticks.
+        // A boot announcement (New Index) does the same for small ticks ...
         let mut c = TickClock::new();
         let a = c.wall(200_000).micros();
-        c.reset();
+        c.reboot_announced();
         let b = c.wall(5).micros();
         assert!(b >= a - 1_000_000);
+        // ... but the Open Index that follows keeps the fresh anchor: the device's
+        // 300 µs stay 300 µs instead of the host's delay between the two frames.
+        c.reboot_announced();
+        let d = c.wall(8).micros();
+        assert_eq!(d - b, 300);
+        // Nor does an announcement with ticks still running forward re-anchor.
+        let mut c = TickClock::new();
+        let a = c.wall(1_000).micros();
+        c.reboot_announced();
+        assert_eq!(c.wall(1_010).micros() - a, 1_000);
     }
 }
