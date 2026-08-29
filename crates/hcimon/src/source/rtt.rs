@@ -16,7 +16,7 @@ use probe_rs::rtt::{Rtt, ScanRegion};
 use probe_rs::{Permissions, Session};
 
 use super::discovery::ProbeCandidate;
-use super::SourceCtx;
+use super::{SourceCtx, TickClock};
 
 const DEFAULT_CHANNEL_NAME: &str = "btmonitor";
 const IDLE_POLL: Duration = Duration::from_millis(5);
@@ -173,6 +173,7 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
         first_attach = false;
 
         let mut framer = Framer::new();
+        let mut clock = TickClock::new();
         let mut last_data = Instant::now();
         while !ctx.stopped() {
             match chan.read(&mut core, &mut buf) {
@@ -184,12 +185,12 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
                 Ok(n) => {
                     last_data = Instant::now();
                     framer.push(&buf[..n]);
-                    let now = Timestamp::now();
                     while let Some(frame) = framer.next_frame() {
                         let mut pkt = frame.packet;
-                        if pkt.ts.is_none() {
-                            pkt.ts = Some(now);
-                        }
+                        pkt.ts = Some(match frame.ts32 {
+                            Some(t) => clock.wall(t),
+                            None => Timestamp::now(),
+                        });
                         if !ctx.packet(pkt) {
                             return;
                         }

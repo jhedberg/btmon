@@ -13,6 +13,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use hcimon_capture::{tty::Framer, Timestamp};
 
+use super::TickClock;
+
 use super::SourceCtx;
 
 const READ_TIMEOUT: Duration = Duration::from_millis(100);
@@ -40,6 +42,7 @@ fn open(path: &str, baud: u32) -> Result<Box<dyn serialport::SerialPort>> {
 
 fn run(ctx: SourceCtx, path: String, baud: u32, mut port: Option<Box<dyn serialport::SerialPort>>) {
     let mut framer = Framer::new();
+    let mut clock = TickClock::new();
     let mut buf = [0u8; 4096];
     let mut announced = false;
 
@@ -69,12 +72,12 @@ fn run(ctx: SourceCtx, path: String, baud: u32, mut port: Option<Box<dyn serialp
             }
             Ok(n) => {
                 framer.push(&buf[..n]);
-                let now = Timestamp::now();
                 while let Some(frame) = framer.next_frame() {
                     let mut pkt = frame.packet;
-                    if pkt.ts.is_none() {
-                        pkt.ts = Some(now);
-                    }
+                    pkt.ts = Some(match frame.ts32 {
+                        Some(t) => clock.wall(t),
+                        None => Timestamp::now(),
+                    });
                     if !ctx.packet(pkt) {
                         return;
                     }

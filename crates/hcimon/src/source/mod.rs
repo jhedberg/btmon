@@ -20,7 +20,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::Result;
-use hcimon_capture::Packet;
+use hcimon_capture::{Packet, Timestamp};
 use crossbeam_channel::Sender;
 
 /// Identifies a source within a session.
@@ -54,6 +54,48 @@ impl SourceKind {
             SourceKind::File { path } => short_path(path).to_string(),
             SourceKind::Kernel => "kernel".to_string(),
         }
+    }
+}
+
+/// Turns the free-running 100 µs tick of the monitor stream into wall-clock
+/// timestamps: the first packet is anchored at the host's clock and later
+/// ones follow the device's own tick, which is finer and steadier than the
+/// host's arrival time.  A tick going backwards by a lot means the device
+/// rebooted, and the clock re-anchors; a small wrap is the 32-bit counter.
+#[derive(Debug, Default)]
+pub struct TickClock {
+    anchor_wall_us: i64,
+    anchor_tick: u64,
+    last_tick: u64,
+    anchored: bool,
+}
+
+impl TickClock {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn wall(&mut self, tick100us: u32) -> Timestamp {
+        let now = Timestamp::now().micros();
+        let mut tick = tick100us as u64;
+        if self.anchored {
+            if tick < self.last_tick {
+                if self.last_tick - tick > u32::MAX as u64 / 2 {
+                    // 32-bit wraparound (about 5 days at 100 µs).
+                    tick += 1u64 << 32;
+                } else {
+                    // The device restarted its clock.
+                    self.anchored = false;
+                }
+            }
+        }
+        if !self.anchored {
+            self.anchor_wall_us = now;
+            self.anchor_tick = tick;
+            self.anchored = true;
+        }
+        self.last_tick = tick;
+        Timestamp::Wall(self.anchor_wall_us + (tick - self.anchor_tick) as i64 * 100)
     }
 }
 
@@ -208,5 +250,28 @@ impl SourceManager {
 
     pub fn any_running(&self) -> bool {
         self.sources.iter().any(|s| !s.is_finished())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tick_clock_follows_device_ticks_and_reanchors() {
+        let mut c = TickClock::new();
+        let t0 = c.wall(1000).micros();
+        let t1 = c.wall(1010).micros();
+        assert_eq!(t1 - t0, 1000, "10 ticks of 100 µs");
+        // Small wrap of the 32-bit counter keeps counting forward.
+        let mut c = TickClock::new();
+        let a = c.wall(u32::MAX - 5).micros();
+        let b = c.wall(4).micros();
+        assert_eq!(b - a, 10 * 100);
+        // A large jump backwards is a reboot: time keeps moving forward from "now".
+        let mut c = TickClock::new();
+        let a = c.wall(5_000_000).micros();
+        let b = c.wall(10).micros();
+        assert!(b >= a - 1_000_000, "re-anchored near the host clock, not 500 s in the past");
     }
 }
