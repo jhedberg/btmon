@@ -633,7 +633,11 @@ impl App {
     fn handle_source_event(&mut self, ev: SourceEvent) {
         match ev {
             SourceEvent::Packet { source, packet } => {
-                if let Some(entry) = self.session.ingest(source, packet) {
+                let entry = self.session.ingest(source, packet);
+                if let Some(err) = self.session.take_recording_error() {
+                    self.set_message(err, true);
+                }
+                if let Some(entry) = entry {
                     self.push_entry(entry);
                 }
             }

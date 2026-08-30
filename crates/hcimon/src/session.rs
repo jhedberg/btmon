@@ -88,6 +88,8 @@ pub struct Session {
     /// Decoder state per source (controller indexes are only unique within a source).
     contexts: HashMap<SourceId, DecodeContext>,
     writer: Option<btsnoop::Writer<std::fs::File>>,
+    /// Why recording stopped, until someone asks.
+    recording_error: Option<String>,
     next_seq: u64,
     pub first_ts: Option<Timestamp>,
     pub packets_total: u64,
@@ -108,6 +110,7 @@ impl Session {
             rx,
             contexts: HashMap::new(),
             writer,
+            recording_error: None,
             next_seq: 1,
             first_ts: None,
             packets_total: 0,
@@ -182,7 +185,9 @@ impl Session {
         self.packets_total += 1;
         if let Some(w) = self.writer.as_mut() {
             // Flush per packet so that a capture survives an abrupt exit.
-            let _ = w.write_packet(&packet).and_then(|_| w.flush());
+            if let Err(e) = w.write_packet(&packet).and_then(|_| w.flush()) {
+                self.fail_recording(e);
+            }
         }
         if let Some(idx) = self.config.index {
             if packet.index != idx && packet.index != hcimon_capture::INDEX_NONE {
@@ -210,9 +215,25 @@ impl Session {
 
     pub fn flush_writer(&mut self) {
         if let Some(w) = self.writer.as_mut() {
-            let _ = w.flush();
+            if let Err(e) = w.flush() {
+                self.fail_recording(e);
+            }
         }
     }
+
+    /// Recording stopped: drop the writer rather than fail on every packet,
+    /// and keep the reason for whoever reports it.
+    fn fail_recording(&mut self, e: io::Error) {
+        let path = self.config.write.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+        self.writer = None;
+        self.recording_error = Some(format!("recording to {path} stopped: {e}"));
+    }
+
+    /// The reason recording stopped, if it did since the last call.
+    pub fn take_recording_error(&mut self) -> Option<String> {
+        self.recording_error.take()
+    }
+
 
     /// Plain streaming mode: print until every source has finished, or until
     /// SIGINT/SIGTERM, which stop the sources and close the capture file cleanly.
@@ -244,7 +265,13 @@ impl Session {
             }
             match self.next_event(Duration::from_millis(200)) {
                 Some(Event::Packet { source, packet }) => {
-                    if let Some(entry) = self.ingest(source, packet) {
+                    let entry = self.ingest(source, packet);
+                    if let Some(err) = self.take_recording_error() {
+                        failed = true;
+                        printer.flush()?;
+                        eprintln!("hcimon: {err}");
+                    }
+                    if let Some(entry) = entry {
                         printer.set_origin(self.first_ts);
                         let matches = self.config.filter.as_ref().is_none_or(|q| q.matches(&entry.index));
                         let mut to_print: Vec<(Entry, bool)> = Vec::new();
@@ -336,6 +363,10 @@ impl Session {
             out.flush()?;
         }
         self.flush_writer();
+        if let Some(err) = self.take_recording_error() {
+            failed = true;
+            eprintln!("hcimon: {err}");
+        }
         Ok(failed)
     }
 }
