@@ -12,6 +12,7 @@ use super::app::{AddKind, App, Focus, LayoutMode, Popup, SourceState};
 use super::filter::{Category, LAYERS};
 use super::widgets::{centered_rect, flatten_tree, TextInput};
 use crate::source::short_path;
+use crate::terminal::TermLine;
 use crate::time::{format_delta, format_time, TimeMode};
 
 /// btmon's colour for a packet.
@@ -57,6 +58,16 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     draw_header(frame, app, header);
 
+    // The shell pane takes the bottom of the body when shown.
+    let (body, shell_area) = if app.shell_visible {
+        let h = (body.height * 35 / 100).max(5).min(body.height.saturating_sub(4)).max(1);
+        let [b, s] = Layout::vertical([Constraint::Fill(1), Constraint::Length(h)]).areas(body);
+        (b, s)
+    } else {
+        (body, Rect::default())
+    };
+    app.areas.shell = shell_area;
+
     let (list_area, details_area) = match app.layout {
         LayoutMode::Hidden => (body, Rect::default()),
         LayoutMode::Bottom => {
@@ -74,6 +85,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     draw_list(frame, app, list_area);
     if app.layout != LayoutMode::Hidden {
         draw_details(frame, app, details_area);
+    }
+    if app.shell_visible {
+        draw_shell(frame, app, shell_area);
     }
     draw_status(frame, app, status);
 
@@ -326,6 +340,98 @@ fn draw_details(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_stateful_widget(list, inner, &mut state);
 }
 
+/// The target's shell / console (RTT terminal channel) of the selected source.
+fn draw_shell(frame: &mut Frame, app: &mut App, area: Rect) {
+    let focused = app.focus == Focus::Shell;
+    let label = app
+        .shell_source
+        .and_then(|id| app.session.sources().iter().find(|s| s.id == id).map(|s| s.kind.label()))
+        .unwrap_or_else(|| "no source".to_string());
+    let hint = if focused { "keys go to the target · Esc: back · PgUp/PgDn: history" } else { "Tab or click: type here · T: hide" };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" Shell: {label} · {hint} "))
+        .border_style(if focused { Style::default().fg(Color::Cyan) } else { Style::default().fg(Color::DarkGray) });
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+    let dim = Style::default().fg(Color::DarkGray);
+    let Some(term) = app.shell_source.and_then(|id| app.terminals.get_mut(&id)) else {
+        let text = if app.shell_source.is_some() {
+            " no output yet: Tab here and press Enter for a prompt"
+        } else {
+            " no source with a shell channel — add an RTT source (a) whose Zephyr shell runs over RTT (CONFIG_SHELL_BACKEND_RTT=y)"
+        };
+        frame.render_widget(Paragraph::new(Span::styled(text, dim)).wrap(Wrap { trim: false }), inner);
+        return;
+    };
+    let height = inner.height as usize;
+    term.set_size(inner.width as usize, height);
+    let total = term.lines().len();
+    let scroll = app.shell_scroll.min(total.saturating_sub(height));
+    let end = total - scroll;
+    let start = end.saturating_sub(height);
+    let lines: Vec<Line<'static>> = term.lines().iter().skip(start).take(end - start).map(|l| term_line(l, inner.width as usize)).collect();
+    let (cursor_row, cursor_col) = term.cursor();
+    app.shell_scroll = scroll;
+    frame.render_widget(Paragraph::new(lines), inner);
+    if focused && scroll == 0 && cursor_row >= start {
+        let x = inner.x + (cursor_col as u16).min(inner.width.saturating_sub(1));
+        let y = inner.y + (cursor_row - start) as u16;
+        frame.set_cursor_position((x, y));
+    }
+}
+
+fn term_line(line: &TermLine, width: usize) -> Line<'static> {
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut text = String::new();
+    let mut style = None;
+    for cell in line.cells.iter().take(width) {
+        if style != Some(cell.style) {
+            if let Some(s) = style {
+                spans.push(Span::styled(std::mem::take(&mut text), term_style(s)));
+            }
+            style = Some(cell.style);
+        }
+        text.push(cell.ch);
+    }
+    if let Some(s) = style {
+        spans.push(Span::styled(text, term_style(s)));
+    }
+    Line::from(spans)
+}
+
+fn term_style(s: crate::terminal::Style) -> Style {
+    const PALETTE: [Color; 16] = [
+        Color::Black,
+        Color::Red,
+        Color::Green,
+        Color::Yellow,
+        Color::Blue,
+        Color::Magenta,
+        Color::Cyan,
+        Color::Gray,
+        Color::DarkGray,
+        Color::LightRed,
+        Color::LightGreen,
+        Color::LightYellow,
+        Color::LightBlue,
+        Color::LightMagenta,
+        Color::LightCyan,
+        Color::White,
+    ];
+    let mut style = Style::default();
+    if let Some(fg) = s.fg {
+        style = style.fg(PALETTE[(fg as usize) % 16]);
+    }
+    if s.bold {
+        style = style.add_modifier(Modifier::BOLD);
+    }
+    style
+}
+
 fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
     let line = match &app.message {
         Some((_, text, is_error)) => {
@@ -351,6 +457,7 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
                 ("t", "time"),
                 ("l", "layout"),
                 ("x", "hex"),
+                ("T", "shell"),
                 ("Tab", "focus"),
             ];
             let mut spans = Vec::new();
@@ -646,7 +753,8 @@ fn draw_add_source(frame: &mut Frame, area: Rect, add: &super::app::AddSource) {
                 Span::styled(if add.reset { "[x] reset the target after attaching (capture from boot)" } else { "[ ] reset the target after attaching (capture from boot)" }, hl(add.field == 4)),
             ]));
             lines.push(Line::from(""));
-            lines.push(Line::from(Span::styled(" Zephyr: CONFIG_BT_DEBUG_MONITOR_RTT=y; chip names as in `probe-rs chip list`", Style::default().fg(Color::DarkGray))));
+            lines.push(Line::from(Span::styled(" Zephyr: CONFIG_USE_SEGGER_RTT=y + CONFIG_BT_DEBUG_MONITOR_RTT=y; chip names as in `probe-rs chip list`.", Style::default().fg(Color::DarkGray))));
+            lines.push(Line::from(Span::styled(" A shell over RTT (CONFIG_SHELL_BACKEND_RTT=y) shows up in the shell pane (T).", Style::default().fg(Color::DarkGray))));
         }
         AddKind::File => {
             lines.push(Line::from(vec![Span::styled(" Path:    ", Style::default().add_modifier(Modifier::BOLD)), Span::styled(add.path.value.clone(), hl(add.field == 1))]));
@@ -690,7 +798,7 @@ const HELP_TEXT: &str = "\
 Navigation
   ↑/↓ j/k        select packet          PgUp/PgDn   page
   Home/End g/G   first / last (End resumes following new packets)
-  Enter/→        open details           Tab         switch list/details
+  Enter/→        open details           Tab         cycle list / details / shell
   ←              collapse / back        Enter/space toggle node in details
   m              jump to the linked request / response (round-trip time in details)
   F              follow the selected packet's connection (again to stop)
@@ -716,5 +824,10 @@ Sources
   a              add a serial port, RTT channel, file or kernel socket
   s              list sources, remove one, filter by source
   w              write everything captured to a btsnoop file
+
+Shell (Zephyr's shell or console over the RTT terminal channel)
+  T              show / hide the shell pane (it opens by itself on the first output)
+  Tab or click   move the keyboard into the shell; Esc gives it back to the packet list
+  PgUp/PgDn      scroll the shell's history (the mouse wheel works too)
 
 Mouse: scroll and click in both panes.";

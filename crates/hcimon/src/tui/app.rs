@@ -19,16 +19,21 @@ use crate::session::{Entry, Ref, Session};
 use hcimon_decode::Severity;
 use crate::source::discovery::{self, ProbeCandidate, SerialCandidate};
 use crate::source::{Event as SourceEvent, SourceId, SourceKind};
+use crate::terminal::Terminal;
 use crate::time::TimeMode;
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(33);
 const DISCOVERY_INTERVAL: Duration = Duration::from_secs(2);
 const MESSAGE_TTL: Duration = Duration::from_secs(6);
+/// Lines of shell history kept per source.
+const SHELL_SCROLLBACK: usize = 2000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
     List,
     Details,
+    /// Keystrokes go to the target's shell.
+    Shell,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +193,7 @@ impl AddSource {
 pub struct Areas {
     pub list: Rect,
     pub details: Rect,
+    pub shell: Rect,
 }
 
 pub struct App {
@@ -213,6 +219,13 @@ pub struct App {
     pub search: String,
     pub message: Option<(Instant, String, bool)>,
     pub sources: HashMap<SourceId, SourceInfo>,
+    /// Terminal emulators for sources with a shell / console channel (RTT).
+    pub terminals: HashMap<SourceId, Terminal>,
+    pub shell_visible: bool,
+    /// The source whose terminal the shell pane shows.
+    pub shell_source: Option<SourceId>,
+    /// Lines scrolled back from the bottom of the shell pane.
+    pub shell_scroll: usize,
     pub areas: Areas,
     pub dropped: u64,
     pub filtered_out: u64,
@@ -260,6 +273,10 @@ impl App {
             search: String::new(),
             message: None,
             sources: HashMap::new(),
+            terminals: HashMap::new(),
+            shell_visible: false,
+            shell_source: None,
+            shell_scroll: 0,
             areas: Areas::default(),
             dropped: 0,
             filtered_out: 0,
@@ -632,7 +649,19 @@ impl App {
                 info.last_message = message.clone();
                 self.set_message(format!("{label}: {message}"), true);
             }
-            SourceEvent::Terminal { .. } => {}
+            SourceEvent::Terminal { source, data } => {
+                let term = self.terminals.entry(source).or_insert_with(|| Terminal::new(SHELL_SCROLLBACK));
+                let first = term.is_empty();
+                term.feed(&data);
+                if self.shell_source.is_none() {
+                    self.shell_source = Some(source);
+                }
+                if first && !self.shell_visible && self.shell_source == Some(source) {
+                    self.shell_visible = true;
+                    self.set_message("shell pane opened: T hides it, Tab or a click moves the keyboard into it", false);
+                }
+                self.dirty = true;
+            }
             SourceEvent::Eof { source } => {
                 let info = self.source_info_mut(source);
                 if info.state == SourceState::Running {
@@ -650,6 +679,11 @@ impl App {
             return;
         }
         self.dirty = true;
+        if self.popup.is_none() && self.focus == Focus::Shell {
+            // Everything, Ctrl-C included, belongs to the target's shell.
+            self.handle_shell_key(key);
+            return;
+        }
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.should_quit = true;
             return;
@@ -659,6 +693,7 @@ impl App {
             return;
         }
         match key.code {
+            KeyCode::Char('T') => self.toggle_shell(),
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('?') | KeyCode::F(1) => self.popup = Some(Popup::Help),
             KeyCode::Char('/') => self.popup = Some(Popup::Search(TextInput::new(self.search.clone()))),
@@ -697,12 +732,15 @@ impl App {
             KeyCode::Char('x') => self.show_hex = !self.show_hex,
             KeyCode::Tab => {
                 self.focus = match self.focus {
-                    Focus::List => Focus::Details,
-                    Focus::Details => Focus::List,
+                    Focus::List => {
+                        if self.layout == LayoutMode::Hidden {
+                            self.layout = LayoutMode::Bottom;
+                        }
+                        Focus::Details
+                    }
+                    Focus::Details if self.shell_visible && self.shell_source.is_some() => Focus::Shell,
+                    Focus::Details | Focus::Shell => Focus::List,
                 };
-                if self.layout == LayoutMode::Hidden {
-                    self.layout = LayoutMode::Bottom;
-                }
             }
             KeyCode::Esc => {
                 if self.focus == Focus::Details {
@@ -715,7 +753,50 @@ impl App {
             _ => match self.focus {
                 Focus::List => self.handle_list_key(key),
                 Focus::Details => self.handle_details_key(key),
+                Focus::Shell => {}
             },
+        }
+    }
+
+    fn toggle_shell(&mut self) {
+        self.shell_visible = !self.shell_visible;
+        if !self.shell_visible && self.focus == Focus::Shell {
+            self.focus = Focus::List;
+        }
+        if self.shell_visible && self.shell_source.is_none() {
+            self.shell_source = self.session.sources().iter().find(|s| s.has_terminal()).map(|s| s.id);
+            if self.shell_source.is_none() {
+                self.set_message("no source with a shell channel: add an RTT source (a) running Zephyr's shell over RTT", false);
+            }
+        }
+    }
+
+    fn handle_shell_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.focus = Focus::List;
+                return;
+            }
+            KeyCode::PageUp => {
+                self.shell_scroll += 10;
+                return;
+            }
+            KeyCode::PageDown => {
+                self.shell_scroll = self.shell_scroll.saturating_sub(10);
+                return;
+            }
+            _ => {}
+        }
+        let Some(id) = self.shell_source else {
+            self.focus = Focus::List;
+            return;
+        };
+        if let Some(bytes) = shell_bytes(key) {
+            self.shell_scroll = 0;
+            if !self.session.send_terminal(id, &bytes) {
+                self.set_message("the shell's source is gone", true);
+                self.focus = Focus::List;
+            }
         }
     }
 
@@ -1015,16 +1096,21 @@ impl App {
         }
         let in_list = self.areas.list.contains((column, row).into());
         let in_details = self.areas.details.contains((column, row).into());
+        let in_shell = self.areas.shell.contains((column, row).into());
         match kind {
             MouseEventKind::ScrollUp => {
-                if in_details {
+                if in_shell {
+                    self.shell_scroll += 3;
+                } else if in_details {
                     self.details_cursor = self.details_cursor.saturating_sub(3);
                 } else {
                     self.move_selection(-3);
                 }
             }
             MouseEventKind::ScrollDown => {
-                if in_details {
+                if in_shell {
+                    self.shell_scroll = self.shell_scroll.saturating_sub(3);
+                } else if in_details {
                     let rows = self.detail_rows();
                     self.details_cursor = (self.details_cursor + 3).min(rows.saturating_sub(1));
                 } else {
@@ -1047,6 +1133,8 @@ impl App {
                     if idx < self.detail_rows() {
                         self.details_cursor = idx;
                     }
+                } else if in_shell && self.shell_source.is_some() {
+                    self.focus = Focus::Shell;
                 }
             }
             _ => return,
@@ -1078,6 +1166,17 @@ impl App {
             }
         }
         self.poll_discovery();
+        // The shell's source may have been removed.
+        if let Some(id) = self.shell_source {
+            if !self.session.sources().iter().any(|s| s.id == id) {
+                self.terminals.remove(&id);
+                self.shell_source = self.session.sources().iter().find(|s| s.has_terminal()).map(|s| s.id);
+                if self.focus == Focus::Shell && self.shell_source.is_none() {
+                    self.focus = Focus::List;
+                }
+                self.dirty = true;
+            }
+        }
         // Sources that stopped silently.
         let ids: Vec<SourceId> = self.session.sources().iter().filter(|s| s.is_finished()).map(|s| s.id).collect();
         for id in ids {
@@ -1087,6 +1186,46 @@ impl App {
                 self.dirty = true;
             }
         }
+    }
+}
+
+/// Bytes a key sends to the target's shell: what a VT100-style terminal would
+/// send, which is what Zephyr's shell expects (arrows and Home/End/Delete as
+/// escape sequences, Enter as CR, Backspace as DEL, control keys as C0 codes).
+pub fn shell_bytes(key: KeyEvent) -> Option<Vec<u8>> {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
+    let seq = |s: &str| Some(s.as_bytes().to_vec());
+    match key.code {
+        KeyCode::Char(c) if ctrl => {
+            let c = c.to_ascii_uppercase();
+            if c.is_ascii_uppercase() || "@[\\]^_".contains(c) {
+                Some(vec![(c as u8) & 0x1f])
+            } else {
+                None
+            }
+        }
+        KeyCode::Char(c) => {
+            let mut bytes = Vec::new();
+            if alt {
+                bytes.push(0x1b);
+            }
+            let mut utf8 = [0u8; 4];
+            bytes.extend_from_slice(c.encode_utf8(&mut utf8).as_bytes());
+            Some(bytes)
+        }
+        KeyCode::Enter => seq("\r"),
+        KeyCode::Backspace => Some(vec![0x7f]),
+        KeyCode::Tab => seq("\t"),
+        KeyCode::Up => seq("\x1b[A"),
+        KeyCode::Down => seq("\x1b[B"),
+        KeyCode::Right => seq("\x1b[C"),
+        KeyCode::Left => seq("\x1b[D"),
+        KeyCode::Home => seq("\x1b[H"),
+        KeyCode::End => seq("\x1b[F"),
+        KeyCode::Delete => seq("\x1b[3~"),
+        KeyCode::Insert => seq("\x1b[2~"),
+        _ => None,
     }
 }
 
@@ -1253,5 +1392,30 @@ impl App {
     /// Timestamp of the packet before the selected one (for delta display).
     pub fn prev_ts(&self, visible_idx: usize) -> Option<Timestamp> {
         visible_idx.checked_sub(1).and_then(|i| self.visible.get(i)).and_then(|&e| self.entries[e].packet.ts)
+    }
+}
+
+#[cfg(test)]
+mod shell_tests {
+    use super::*;
+
+    fn key(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, mods)
+    }
+
+    #[test]
+    fn keys_become_what_a_terminal_sends() {
+        assert_eq!(shell_bytes(key(KeyCode::Char('b'), KeyModifiers::NONE)), Some(b"b".to_vec()));
+        assert_eq!(shell_bytes(key(KeyCode::Char('é'), KeyModifiers::NONE)), Some("é".as_bytes().to_vec()));
+        assert_eq!(shell_bytes(key(KeyCode::Char('c'), KeyModifiers::CONTROL)), Some(vec![0x03]));
+        assert_eq!(shell_bytes(key(KeyCode::Char('L'), KeyModifiers::CONTROL)), Some(vec![0x0c]));
+        assert_eq!(shell_bytes(key(KeyCode::Char('x'), KeyModifiers::ALT)), Some(vec![0x1b, b'x']));
+        assert_eq!(shell_bytes(key(KeyCode::Enter, KeyModifiers::NONE)), Some(b"\r".to_vec()));
+        assert_eq!(shell_bytes(key(KeyCode::Backspace, KeyModifiers::NONE)), Some(vec![0x7f]));
+        assert_eq!(shell_bytes(key(KeyCode::Up, KeyModifiers::NONE)), Some(b"\x1b[A".to_vec()));
+        assert_eq!(shell_bytes(key(KeyCode::Home, KeyModifiers::NONE)), Some(b"\x1b[H".to_vec()));
+        assert_eq!(shell_bytes(key(KeyCode::Delete, KeyModifiers::NONE)), Some(b"\x1b[3~".to_vec()));
+        assert_eq!(shell_bytes(key(KeyCode::F(1), KeyModifiers::NONE)), None);
+        assert_eq!(shell_bytes(key(KeyCode::Char('1'), KeyModifiers::CONTROL)), None);
     }
 }
