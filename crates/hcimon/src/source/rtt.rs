@@ -26,6 +26,10 @@ const IDLE_POLL: Duration = Duration::from_millis(5);
 const RETRY_DELAY: Duration = Duration::from_millis(500);
 /// How long to keep trying to push shell input into a full down-buffer.
 const INPUT_TIMEOUT: Duration = Duration::from_millis(500);
+/// How long to wait for the wanted up-channel to be registered once the
+/// control block exists: Zephyr registers the terminal buffer at boot and the
+/// monitor's only when the Bluetooth monitor starts, a little later.
+const CHANNEL_WAIT: Duration = Duration::from_secs(3);
 
 /// Probes currently attached to the host.
 pub fn list_probes() -> Vec<ProbeCandidate> {
@@ -105,26 +109,46 @@ fn attach(chip: &str, selector: &DebugProbeSelector) -> Result<Session> {
     Ok(session)
 }
 
-fn find_channel(rtt: &mut Rtt, wanted: Option<&str>) -> Result<usize> {
-    let channels = rtt.up_channels();
-    if channels.is_empty() {
-        bail!("the RTT control block has no up-channels");
+/// Outcome of looking for the up-channel to read.
+#[derive(Debug, PartialEq, Eq)]
+enum Pick {
+    /// The channel that was asked for (or the default name) exists.
+    Found(usize),
+    /// Nothing was asked for and the default name is absent: channel 0 would do.
+    Fallback(usize),
+    /// What was asked for does not exist.
+    Missing(String),
+}
+
+/// Choose the up-channel from the names on offer.
+fn pick_channel(names: &[Option<&str>], wanted: Option<&str>) -> Pick {
+    if names.is_empty() {
+        return Pick::Missing("the RTT control block has no up-channels".into());
     }
     match wanted {
         Some(w) => {
             if let Ok(n) = w.parse::<usize>() {
-                if n < channels.len() {
-                    return Ok(n);
-                }
-                bail!("RTT up-channel {n} does not exist ({} channels)", channels.len());
+                return if n < names.len() {
+                    Pick::Found(n)
+                } else {
+                    Pick::Missing(format!("RTT up-channel {n} does not exist ({} channels)", names.len()))
+                };
             }
-            channels
-                .iter()
-                .position(|c| c.name() == Some(w))
-                .ok_or_else(|| anyhow!("no RTT up-channel named {w:?}"))
+            match names.iter().position(|c| *c == Some(w)) {
+                Some(i) => Pick::Found(i),
+                None => Pick::Missing(format!("no RTT up-channel named {w:?}")),
+            }
         }
-        None => Ok(channels.iter().position(|c| c.name() == Some(DEFAULT_CHANNEL_NAME)).unwrap_or(0)),
+        None => match names.iter().position(|c| *c == Some(DEFAULT_CHANNEL_NAME)) {
+            Some(i) => Pick::Found(i),
+            None => Pick::Fallback(0),
+        },
     }
+}
+
+fn find_channel(rtt: &mut Rtt, wanted: Option<&str>) -> Pick {
+    let names: Vec<Option<&str>> = rtt.up_channels().iter().map(|c| c.name()).collect();
+    pick_channel(&names, wanted)
 }
 
 /// Where the last control block of a chip was found, so that the next attach
@@ -256,8 +280,11 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
             // Let the firmware get as far as setting up its control block.
             ctx.sleep(Duration::from_millis(200));
         }
-        // The control block may not exist until the firmware has booted.
-        let mut rtt = loop {
+        // The control block may not exist until the firmware has booted, and
+        // its channels are registered one by one, so a block that is there
+        // but lacks the wanted channel gets a little time to grow it.
+        let mut block_seen: Option<Instant> = None;
+        let (mut rtt, idx) = loop {
             if ctx.stopped() {
                 return;
             }
@@ -265,25 +292,33 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
                 // A block whose channel names are not text is one still being
                 // set up (or left over from another image): try again shortly.
                 Ok(mut r) => {
-                    if channels_sane(&mut r) {
-                        break r;
+                    if !channels_sane(&mut r) {
+                        ctx.sleep(RETRY_DELAY);
+                        continue;
                     }
-                    ctx.sleep(RETRY_DELAY);
+                    let seen = *block_seen.get_or_insert_with(Instant::now);
+                    match find_channel(&mut r, channel.as_deref()) {
+                        Pick::Found(i) => break (r, i),
+                        Pick::Fallback(i) if seen.elapsed() >= CHANNEL_WAIT => {
+                            let name = r.up_channel(i).and_then(|c| c.name()).unwrap_or("unnamed").to_string();
+                            ctx.status(format!("{chip}: no RTT up-channel named {DEFAULT_CHANNEL_NAME:?}, reading channel {i} ({name}) instead"));
+                            break (r, i);
+                        }
+                        Pick::Missing(what) if seen.elapsed() >= CHANNEL_WAIT => {
+                            ctx.error(what);
+                            return;
+                        }
+                        _ => ctx.sleep(RETRY_DELAY),
+                    }
                 }
                 Err(_) => {
+                    block_seen = None;
                     if first_attach {
                         ctx.status(format!("{chip}: waiting for the RTT control block"));
                         first_attach = false;
                     }
                     ctx.sleep(RETRY_DELAY);
                 }
-            }
-        };
-        let idx = match find_channel(&mut rtt, channel.as_deref()) {
-            Ok(i) => i,
-            Err(e) => {
-                ctx.error(format!("{e:#}"));
-                return;
             }
         };
         let terminal = if input.is_some() { find_terminal(&mut rtt, idx) } else { None };
@@ -409,4 +444,23 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
         }
     }
     ctx.eof();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_choice() {
+        let boot = [Some("Terminal")];
+        let full = [Some("Terminal"), Some("btmonitor")];
+        // Right after a reset only the terminal is registered: no decision yet.
+        assert_eq!(pick_channel(&boot, None), Pick::Fallback(0));
+        assert_eq!(pick_channel(&full, None), Pick::Found(1));
+        assert_eq!(pick_channel(&full, Some("btmonitor")), Pick::Found(1));
+        assert_eq!(pick_channel(&full, Some("1")), Pick::Found(1));
+        assert!(matches!(pick_channel(&full, Some("5")), Pick::Missing(_)));
+        assert!(matches!(pick_channel(&boot, Some("btmonitor")), Pick::Missing(_)));
+        assert!(matches!(pick_channel(&[], None), Pick::Missing(_)));
+    }
 }
