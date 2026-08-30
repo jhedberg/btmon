@@ -2,7 +2,7 @@
 
 use hcimon_decode::{Layer, Lifecycle, Opcode, Query};
 
-use crate::conversations::handles_of;
+use crate::conversations::{connection_handles_of, controller_boundary};
 use crate::session::Entry;
 use crate::source::SourceId;
 
@@ -23,17 +23,17 @@ impl Follow {
             && e.packet.index == self.index
             && e.seq >= self.first
             && self.last.is_none_or(|l| e.seq <= l)
-            && handles_of(e).contains(&self.handle)
+            && connection_handles_of(e).contains(&self.handle)
     }
 
     /// Whether `e` ends the followed connection, and where: its
-    /// disconnection stays in view, a new connection on the handle or the
-    /// controller starting over do not.
+    /// disconnection stays in view; a new connection on the handle, or the
+    /// controller starting over or going away, do not.
     pub fn end_at(&self, e: &Entry) -> Option<u64> {
         if e.source != self.source || e.packet.index != self.index {
             return None;
         }
-        if e.packet.opcode == Opcode::NewIndex {
+        if controller_boundary(e) {
             return Some(e.seq.saturating_sub(1));
         }
         e.decoded.lifecycle.iter().find_map(|l| match l {
@@ -312,5 +312,19 @@ mod tests {
         let mut other = es[2].clone();
         other.source = SourceId(2);
         assert_eq!(f.end_at(&other), None);
+        // Controller boundaries end it before themselves: New Index, a successful HCI Reset, Delete Index.
+        let mut ni = vec![0u8; 16];
+        ni[8..12].copy_from_slice(b"hci0");
+        let es = entries(&[(Opcode::Event, le_connect(1)), (Opcode::NewIndex, ni), (Opcode::Event, le_connect(1)), (Opcode::Event, vec![0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00]), (Opcode::DelIndex, vec![])]);
+        assert_eq!(f.end_at(&es[1]), Some(1));
+        assert_eq!(f.end_at(&es[3]), Some(3));
+        assert_eq!(f.end_at(&es[4]), Some(4));
+        assert_eq!(f.end_at(&entries(&[(Opcode::Event, vec![0x0e, 0x04, 0x01, 0x03, 0x0c, 0x0c])])[0]), None);
+        // Following a CIS includes the packet that established it.
+        let mut cis = vec![0x3e, 0x1d, 0x19, 0x00, 0x03, 0x00];
+        cis.extend([0u8; 26]);
+        let es = entries(&[(Opcode::Event, cis)]);
+        let f = Follow { source: SourceId(1), index: 0, handle: 3, first: 1, last: None };
+        assert!(f.matches(&es[0]));
     }
 }

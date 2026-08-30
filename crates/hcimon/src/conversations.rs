@@ -34,6 +34,29 @@ fn lifecycle_handles(e: &Entry, want: fn(&Lifecycle) -> Option<u16>) -> Vec<u16>
     e.decoded.lifecycle.iter().filter_map(want).collect()
 }
 
+/// Connection handles the packet belongs to: those in its fields and its
+/// data header, plus the ones it established or closed (a CIS or BIS
+/// establishment names them under other labels), minus any it failed to
+/// establish.
+pub fn connection_handles_of(e: &Entry) -> Vec<u16> {
+    let mut v = handles_of(e);
+    for l in &e.decoded.lifecycle {
+        match l {
+            Lifecycle::Established(h) | Lifecycle::Closed(h) => v.push(*h),
+            Lifecycle::EstablishmentFailed(h) => v.retain(|x| x != h),
+            _ => {}
+        }
+    }
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
+/// Whether the packet marks the end of everything on its controller.
+pub fn controller_boundary(e: &Entry) -> bool {
+    e.decoded.lifecycle.iter().any(|l| matches!(l, Lifecycle::ControllerReset | Lifecycle::ControllerRemoved))
+}
+
 /// Connection handles referenced by a packet: `Handle:` fields (the decoders
 /// print connection handles in decimal and attribute handles as `0x....`, which
 /// tells them apart) or the ACL/SCO/ISO header.
@@ -57,26 +80,20 @@ pub fn collect(entries: &[Entry]) -> Vec<Conversation> {
     // The row currently collecting a (source, controller, handle).
     let mut current: HashMap<(SourceId, u16, u16), usize> = HashMap::new();
     for e in entries {
-        if e.packet.opcode == Opcode::NewIndex {
-            // The controller starts over: whatever was open on it is gone.
+        if controller_boundary(e) {
+            // The controller starts over or goes away: whatever was open on it is gone.
             for (&(src, idx, _), &i) in &current {
                 if src == e.source && idx == e.packet.index {
                     rows[i].open = false;
                 }
             }
             current.retain(|&(src, idx, _), _| !(src == e.source && idx == e.packet.index));
-            continue;
         }
         let established = lifecycle_handles(e, |l| if let Lifecycle::Established(h) = l { Some(*h) } else { None });
         let closed = lifecycle_handles(e, |l| if let Lifecycle::Closed(h) = l { Some(*h) } else { None });
-        // Handles the packet mentions, plus those it established (a BIG's
-        // handles are listed, not printed as `Handle:` fields).
-        let mut handles = handles_of(e);
-        for h in &established {
-            if !handles.contains(h) {
-                handles.push(*h);
-            }
-        }
+        // A failed establishment's handle is not a connection, so a row is
+        // neither started nor touched for it.
+        let handles = connection_handles_of(e);
         if handles.is_empty() {
             continue;
         }
@@ -175,7 +192,47 @@ mod tests {
         // A failed connection attempt does not start a row of its own.
         let mut failed = vec![0x03, 0x0b, 0x04, 0x40, 0x00];
         failed.extend([1, 2, 3, 4, 5, 6, 0x01, 0x00]);
-        assert_eq!(collect(&entries(&[(Opcode::Event, failed)])).len(), 1);
+        assert!(collect(&entries(&[(Opcode::Event, failed)])).is_empty());
+    }
+
+    /// LE CIS Established for CIS handle 3, with `status`.
+    pub(crate) fn cis_established(status: u8) -> Vec<u8> {
+        let mut v = vec![0x3e, 0x1d, 0x19, status, 0x03, 0x00];
+        v.extend([0u8; 26]);
+        v
+    }
+
+    #[test]
+    fn failed_establishments_start_nothing_and_data_alone_starts_an_unknown_row() {
+        let mut failed_le = le_connect(1);
+        failed_le[3] = 0x3e;
+        assert!(collect(&entries(&[(Opcode::Event, failed_le)])).is_empty());
+        assert!(collect(&entries(&[(Opcode::Event, cis_established(0x3e))])).is_empty());
+        // A capture that starts in the middle of a connection still gets a row.
+        let acl = vec![0x40, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00];
+        let rows = collect(&entries(&[(Opcode::AclTx, acl), (Opcode::Event, le_connect(2))]));
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert!(rows[0].peer.is_empty() && !rows[0].open && rows[1].open);
+    }
+
+    #[test]
+    fn cis_establishment_belongs_to_its_handle() {
+        let es = entries(&[(Opcode::Event, cis_established(0x00))]);
+        assert_eq!(connection_handles_of(&es[0]), vec![3]);
+        let rows = collect(&es);
+        assert_eq!((rows.len(), rows[0].handle, rows[0].first), (1, 3, 1));
+    }
+
+    #[test]
+    fn hci_reset_and_delete_index_close_the_controllers_connections() {
+        let reset = |status: u8| vec![0x0e, 0x04, 0x01, 0x03, 0x0c, status];
+        let rows = collect(&entries(&[(Opcode::Event, le_connect(1)), (Opcode::Event, reset(0x0c))]));
+        assert!(rows[0].open, "a failed reset changes nothing");
+        let rows = collect(&entries(&[(Opcode::Event, le_connect(1)), (Opcode::Event, reset(0x00)), (Opcode::Event, le_connect(1))]));
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert!(!rows[0].open && rows[1].open);
+        let rows = collect(&entries(&[(Opcode::Event, le_connect(1)), (Opcode::DelIndex, vec![])]));
+        assert!(!rows[0].open);
     }
 
     /// A successful LE Connection Complete for handle 64 with a peer of six `addr` bytes.

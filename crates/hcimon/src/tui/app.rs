@@ -517,14 +517,22 @@ impl App {
 
     fn follow_selected(&mut self) {
         let Some(e) = self.selected_entry() else { return };
-        let Some(&h) = conversations::handles_of(e).first() else {
+        let handles = conversations::connection_handles_of(e);
+        let Some(&h) = handles.first() else {
             self.set_message("the selected packet is not tied to a connection", false);
             return;
         };
         let (source, index, seq) = (e.source, e.packet.index, e.seq);
+        let several = handles.len() > 1;
         let rows = conversations::collect(&self.entries);
         match rows.into_iter().find(|c| c.source == source && c.index == index && c.handle == h && c.first <= seq && seq <= c.last) {
-            Some(c) => self.follow_conversation(&c),
+            Some(c) => {
+                self.follow_conversation(&c);
+                if several {
+                    // A BIG's establishment names every BIS: the list (C) picks the others.
+                    self.set_message(format!("following handle {h}; the packet has {} connections, pick another from the list (C)", handles.len()), false);
+                }
+            }
             None => self.set_message("the selected packet is not tied to a connection", false),
         }
     }
