@@ -106,7 +106,7 @@ pub fn event_params(st: &mut IndexState, code: u8, r: &mut Reader<'_>, out: &mut
 fn command_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let ncmd = r.u8()?;
     let opcode = r.u16()?;
-    st.answer_command(opcode);
+    let answered = st.answer_command(opcode);
     let (text, unknown) = opcode_text_for(st, opcode);
     if unknown {
         out.unknown(format!("{text} ncmd {ncmd}"));
@@ -114,6 +114,10 @@ fn command_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> R
         field!(out, "{} ncmd {}", text, ncmd);
     }
     learn_acl_buffers(st, opcode, r.peek());
+    if opcode == 0x0c03 && r.peek().first() == Some(&0x00) {
+        // A successful HCI Reset: the controller forgot its links and settings.
+        st.reset_controller(answered.unwrap_or(st.frames));
+    }
     out.nest(|o| {
         let mut params = Reader::new(r.rest());
         let res = return_params(st, opcode, &mut params, o);
@@ -153,12 +157,12 @@ fn le_meta(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()>
 
 /// Record a newly established connection in the index state.
 pub fn register_connection(st: &mut IndexState, handle: u16, link: LinkType, addr_type: u8, addr: crate::BdAddr, role: u8) {
-    let frame = st.frames;
-    let c = st.conn_or_insert(handle, link);
+    let mut c = crate::context::Connection::new(handle, link);
     c.addr = addr;
     c.addr_type = addr_type;
     c.role = role;
-    c.since_frame = frame;
+    c.since_frame = st.frames;
+    st.establish_conn(c);
 }
 
 // ---------------------------------------------------------------------------
@@ -829,6 +833,56 @@ mod tests {
             ]
         );
         assert!(st.conn(1).is_none());
+    }
+
+    #[test]
+    fn disconnection_complete_forgets_outstanding_acl() {
+        let mut st = IndexState::default();
+        register_connection(&mut st, 1, LinkType::Acl, 0, BdAddr(ADDR), 0);
+        st.push_acl_tx(1);
+        decode(&mut st, evt::DISCONNECTION_COMPLETE, &[0x00, 0x01, 0x00, 0x13]);
+        assert_eq!(st.acl_in_flight(), 0);
+    }
+
+    #[test]
+    fn connection_complete_starts_a_fresh_connection() {
+        // The handle's previous link never got its Disconnection Complete
+        // captured: nothing of it may carry over.
+        let mut st = IndexState::default();
+        st.frames = 5;
+        register_connection(&mut st, 11, LinkType::Le, 1, BdAddr::ZERO, 1);
+        st.push_acl_tx(11);
+        st.frames = 9;
+        let data = with(&[&[0x00, 0x0b, 0x00], &ADDR, &[0x01, 0x00]]);
+        decode(&mut st, evt::CONNECTION_COMPLETE, &data);
+        let c = st.conn(11).expect("connection registered");
+        assert_eq!((c.link, c.addr, c.role, c.since_frame), (LinkType::Acl, BdAddr(ADDR), 0, 9));
+        assert_eq!(c.att, crate::context::AttState::default());
+        assert_eq!(st.acl_in_flight(), 0);
+    }
+
+    #[test]
+    fn hci_reset_forgets_the_controller_state() {
+        let mut st = IndexState::default();
+        register_connection(&mut st, 1, LinkType::Acl, 0, BdAddr(ADDR), 0);
+        st.push_command(0x1001);
+        st.frames = 3;
+        st.push_command(0x0c03);
+        st.frames = 4;
+        // Sent after the Reset: still going to be answered.
+        st.push_command(0x1003);
+        st.push_acl_tx(1);
+        st.acl_buffers = Some(3);
+        st.frames = 5;
+        decode(&mut st, evt::COMMAND_COMPLETE, &[0x01, 0x03, 0x0c, 0x00]);
+        assert!(st.conn(1).is_none());
+        assert_eq!(st.acl_in_flight(), 0);
+        assert_eq!(st.pending_cmds.keys().copied().collect::<Vec<_>>(), vec![0x1003]);
+        assert_eq!(st.acl_buffers, None);
+        // A failed reset changes nothing.
+        register_connection(&mut st, 1, LinkType::Acl, 0, BdAddr(ADDR), 0);
+        decode(&mut st, evt::COMMAND_COMPLETE, &[0x01, 0x03, 0x0c, 0x0c]);
+        assert!(st.conn(1).is_some());
     }
 
     #[test]

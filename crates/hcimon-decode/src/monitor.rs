@@ -211,6 +211,8 @@ fn new_index(ctx: &mut Context, pkt: &Packet) -> Decoded {
             let addr = BdAddr(ni.bdaddr);
             d.summary = format!("{addr} ({},{},{})", ni.controller_type, ni.bus, ni.name);
             let st = ctx.index_mut(pkt.index);
+            // A controller announcing itself starts from nothing.
+            st.reset_controller(u64::MAX);
             st.name = ni.name;
             st.addr = addr;
         }
@@ -331,6 +333,35 @@ mod tests {
         let lines = ncp.lines().join("\n");
         assert!(lines.contains("Latency: 98 msec (98-98 msec ~98 msec)"), "{lines}");
         assert!(lines.contains("Buffers: 0/3"), "{lines}");
+    }
+
+    #[test]
+    fn new_index_starts_a_fresh_controller() {
+        let mut ctx = Context::new();
+        decode(&mut ctx, &pkt(Opcode::Event, 0, &[0x0e, 0x07, 0x01, 0x02, 0x20, 0x00, 0x1b, 0x00, 0x03]));
+        decode(&mut ctx, &pkt(Opcode::AclTx, 1_000, &[0x40, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00]));
+        let mut ni = vec![0u8; 16];
+        ni[8..12].copy_from_slice(b"hci0");
+        decode(&mut ctx, &pkt(Opcode::NewIndex, 2_000, &ni));
+        // The rebooted controller cannot be completing a packet from before.
+        let ncp = decode(&mut ctx, &pkt(Opcode::Event, 3_000, &[0x13, 0x05, 0x01, 0x40, 0x00, 0x01, 0x00]));
+        assert!(ncp.links.is_empty(), "{:?}", ncp.links);
+        let st = ctx.index(0).unwrap();
+        assert_eq!(st.name, "hci0");
+        assert_eq!(st.acl_buffers, None);
+    }
+
+    #[test]
+    fn handle_reuse_after_disconnect_does_not_complete_old_packets() {
+        let mut ctx = Context::new();
+        let mut connect = vec![0x03, 0x0b, 0x00, 0x40, 0x00];
+        connect.extend([1, 2, 3, 4, 5, 6, 0x01, 0x00]);
+        decode(&mut ctx, &pkt(Opcode::Event, 0, &connect));
+        decode(&mut ctx, &pkt(Opcode::AclTx, 1_000, &[0x40, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00]));
+        decode(&mut ctx, &pkt(Opcode::Event, 2_000, &[0x05, 0x04, 0x00, 0x40, 0x00, 0x13]));
+        decode(&mut ctx, &pkt(Opcode::Event, 3_000, &connect));
+        let ncp = decode(&mut ctx, &pkt(Opcode::Event, 4_000, &[0x13, 0x05, 0x01, 0x40, 0x00, 0x01, 0x00]));
+        assert!(ncp.links.is_empty(), "{:?}", ncp.links);
     }
 
     #[test]

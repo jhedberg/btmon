@@ -230,8 +230,37 @@ impl IndexState {
         self.conns.entry(handle).or_insert_with(|| Connection::new(handle, link))
     }
 
+    /// Forget a connection and everything else keyed by its handle.
     pub fn remove_conn(&mut self, handle: u16) -> Option<Connection> {
+        self.acl_outstanding.remove(&handle);
         self.conns.remove(&handle)
+    }
+
+    /// A connection was established on `conn.handle`: whatever the handle
+    /// carried before (a link whose disconnection was not captured) is gone.
+    pub fn establish_conn(&mut self, conn: Connection) -> &mut Connection {
+        let handle = conn.handle;
+        self.acl_outstanding.remove(&handle);
+        self.conns.insert(handle, conn);
+        self.conns.get_mut(&handle).expect("just inserted")
+    }
+
+    /// The controller started over (New Index, or a successful HCI Reset):
+    /// its links, outstanding packets and settings belong to the past, as
+    /// do commands sent before frame `since` (those sent after an HCI Reset
+    /// command but before its completion are still going to be answered).
+    /// Learned device names and the frame count stay.
+    pub fn reset_controller(&mut self, since: u64) {
+        self.conns.clear();
+        self.pending_iso.clear();
+        self.adv_sets.clear();
+        self.pending_cmds.retain(|_, q| {
+            q.retain(|p| p.frame > since);
+            !q.is_empty()
+        });
+        self.acl_outstanding.clear();
+        self.acl_buffers = None;
+        self.msft_evt_prefix.clear();
     }
 
     /// Manufacturer to use for vendor-specific decoding.
@@ -263,11 +292,12 @@ impl IndexState {
         q.push_back(p);
     }
 
-    /// Link the packet being decoded to the oldest unanswered command with `opcode`.
-    pub fn answer_command(&mut self, opcode: u16) {
-        if let Some(p) = self.pending_cmds.get_mut(&opcode).and_then(|q| q.pop_front()) {
-            self.link_to(p);
-        }
+    /// Link the packet being decoded to the oldest unanswered command with
+    /// `opcode`; returns that command's frame number.
+    pub fn answer_command(&mut self, opcode: u16) -> Option<u64> {
+        let p = self.pending_cmds.get_mut(&opcode).and_then(|q| q.pop_front())?;
+        self.link_to(p);
+        Some(p.frame)
     }
 
     /// Remember an ACL packet sent to the controller until it is reported completed.
