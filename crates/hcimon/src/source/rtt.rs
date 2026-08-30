@@ -341,39 +341,44 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
         let mut input_dropped = false;
         while !ctx.stopped() {
             let mut busy = false;
-            match rtt.up_channel(idx).expect("channel index validated above").read(&mut core, &mut buf) {
-                Ok(0) => {
-                    // The target went quiet: release a frame waiting for its successor
-                    // and, after a longer silence, give up on an incomplete one.
-                    let mut frame = framer.flush();
-                    if frame.is_none() && last_data.elapsed() >= super::QUIET_RESYNC {
-                        frame = framer.abandon();
-                    }
-                    while let Some(f) = frame {
-                        if !ctx.packet(super::stamp(f, &mut clock)) {
-                            return;
+            // The monitor channel gets a bounded burst of reads while it keeps
+            // filling the buffer, so that a flood of packets cannot starve the
+            // terminal and the shell input below.
+            for _ in 0..16 {
+                match rtt.up_channel(idx).expect("channel index validated above").read(&mut core, &mut buf) {
+                    Ok(0) => {
+                        // The target went quiet: release a frame waiting for its successor
+                        // and, after a longer silence, give up on an incomplete one.
+                        let mut frame = framer.flush();
+                        if frame.is_none() && last_data.elapsed() >= super::QUIET_RESYNC {
+                            frame = framer.abandon();
                         }
-                        frame = framer.next_frame().or_else(|| framer.flush());
+                        while let Some(f) = frame {
+                            if !ctx.packet(super::stamp(f, &mut clock)) {
+                                return;
+                            }
+                            frame = framer.next_frame().or_else(|| framer.flush());
+                        }
+                        break;
                     }
-                }
-                Ok(n) => {
-                    busy = true;
-                    last_data = Instant::now();
-                    framer.push(&buf[..n]);
-                    while let Some(frame) = framer.next_frame() {
-                        if !ctx.packet(super::stamp(frame, &mut clock)) {
-                            return;
+                    Ok(n) => {
+                        busy = true;
+                        last_data = Instant::now();
+                        framer.push(&buf[..n]);
+                        while let Some(frame) = framer.next_frame() {
+                            if !ctx.packet(super::stamp(frame, &mut clock)) {
+                                return;
+                            }
+                        }
+                        if n < buf.len() {
+                            break;
                         }
                     }
-                    if n == buf.len() {
-                        // More is waiting: come straight back for it.
-                        continue;
+                    Err(e) => {
+                        ctx.status(format!("{chip}: RTT read failed ({e}), re-attaching"));
+                        ctx.sleep(RETRY_DELAY);
+                        continue 'attach;
                     }
-                }
-                Err(e) => {
-                    ctx.status(format!("{chip}: RTT read failed ({e}), re-attaching"));
-                    ctx.sleep(RETRY_DELAY);
-                    continue 'attach;
                 }
             }
             // Drain the terminal channel: the target drops what does not fit
