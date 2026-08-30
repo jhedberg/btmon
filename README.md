@@ -33,15 +33,18 @@ $ hcimon --tty /dev/serial/by-id/usb-SEGGER_J-Link_000682451005-if00 -p
 
 * **Sources** — serial port (DTR/RTS asserted, automatic reconnect when a
   board is re-plugged or re-flashed), RTT via any [probe-rs] supported debug
-  probe (survives target resets), capture files (btsnoop with the monitor,
+  probe (survives target resets, and also carries the target's shell and
+  console on the terminal channel), capture files (btsnoop with the monitor,
   HCI and H4 datalink types, Apple PacketLogger, raw monitor streams) and the
   Linux kernel monitor socket.  Several sources can be open at once.
 * **Interactive UI** (default on a terminal): scrolling packet list with
   btmon's colours, a details pane with a collapsible field tree and raw bytes,
   free-text search, filters by packet type / protocol layer / controller /
   source / log priority, pause, time display modes, adding and removing
-  sources at runtime (new serial ports are detected while running), and
-  writing everything captured so far to a btsnoop file.
+  sources at runtime (new serial ports are detected while running), writing
+  everything captured so far to a btsnoop file, and a **shell pane** for a
+  Zephyr shell running over RTT: type `bt scan on` in the pane and watch the
+  HCI traffic it causes in the list above, through the one probe session.
 * **Analysis features in the spirit of Wireshark** (none of which btmon has):
   * *display-filter expressions* over every decoded field —
     `att && handle == 0x1c`, `status != Success`, `opcode == "LE Set Scan Enable"`,
@@ -87,7 +90,8 @@ it out.  Reading the Linux kernel monitor socket needs `CAP_NET_RAW`
 ```
 hcimon --tty /dev/ttyACM0                     # Zephyr monitor over UART, interactive UI
 hcimon --tty /dev/ttyACM0 -p                  # ...as btmon-style text
-hcimon --rtt nRF52832_xxAA --probe 682451005  # Zephyr monitor over RTT
+hcimon --rtt nRF52832_xxAA --probe 682451005  # Zephyr monitor over RTT (+ shell pane if the shell is on RTT)
+hcimon --rtt nRF52832_xxAA --rtt-terminal -p  # ...as text, with the shell / console output as "= Shell:" lines
 hcimon -r capture.snoop                       # browse a capture file
 hcimon --tty /dev/ttyACM0 -w capture.snoop    # capture to a btsnoop file while watching
 hcimon --list                                 # show serial ports and debug probes
@@ -166,11 +170,17 @@ arrangements that work are:
   RTT is also the transport with the least effect on the target (see
   below).  Without `CONFIG_USE_SEGGER_RTT=y` the RTT monitor is silently
   left out and `hcimon --rtt` keeps waiting for the RTT control block.
-* **Monitor on the UART, shell over RTT** — `CONFIG_SHELL_BACKEND_RTT=y`
-  (up-buffer 0, the terminal channel, so no collision with the monitor's
-  buffer 1) and `CONFIG_UART_CONSOLE=n`.  An RTT terminal and hcimon's RTT
-  reader cannot share the probe, which is why this pairing needs the monitor
-  on the UART; hcimon does not forward the terminal channel yet.
+* **Everything over RTT** — `CONFIG_SHELL_BACKEND_RTT=y` puts the shell on
+  up-buffer 0 (the terminal channel) next to the monitor's buffer 1, and
+  hcimon reads both through its one probe session: the shell appears in a
+  pane of the UI (`T` shows and hides it, `Tab` or a click moves the keyboard
+  into it, `Esc` gives it back; it opens by itself on the first output), with
+  keystrokes written to the down-buffer.  No UART is needed at all.  One
+  caveat: Zephyr writes RTT buffers in `NO_BLOCK_SKIP` mode, so a burst of
+  shell output larger than the up-buffer loses chunks (16 bytes at a time)
+  and the pane shows lines with holes — with the 1 KB default and `bt scan
+  on` printing a hundred reports a second, about one line in twelve was hit;
+  `CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=4096` leaves room for such bursts.
 * **Two UARTs** — point the monitor at the second one with a
   `zephyr,bt-mon-uart` chosen node in a devicetree overlay and keep console
   and shell on the other.
@@ -231,7 +241,8 @@ Design choices worth knowing about:
   backend initialises, so records created before that (the boot banner, early
   driver logs) carry raw cycle counts (32768 Hz on nRF52) that are emitted as
   if they were ticks — they show up about 0.6 s in the future right after a
-  boot.  A fix for the monitor is pending upstream.
+  boot.  The fix for the monitor is upstream as
+  [zephyr#117774](https://github.com/zephyrproject-rtos/zephyr/pull/117774).
 
 ## Testing with Zephyr hardware
 
