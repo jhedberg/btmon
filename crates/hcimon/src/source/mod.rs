@@ -38,7 +38,15 @@ impl fmt::Display for SourceId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceKind {
     Tty { path: String, baud: u32 },
-    Rtt { chip: String, probe: Option<String>, channel: Option<String>, reset: bool },
+    Rtt {
+        chip: String,
+        probe: Option<String>,
+        channel: Option<String>,
+        reset: bool,
+        /// Also read the RTT terminal channel (Zephyr's shell and console) and
+        /// forward input to it.
+        terminal: bool,
+    },
     File { path: String },
     Kernel,
 }
@@ -160,6 +168,8 @@ pub enum Event {
     Packet { source: SourceId, packet: Packet },
     /// Human readable status change (connected, reconnecting, ...).
     Status { source: SourceId, message: String },
+    /// Bytes from the source's terminal channel (Zephyr's shell / console over RTT).
+    Terminal { source: SourceId, data: Vec<u8> },
     /// The source has finished (end of file, or stopped).
     Eof { source: SourceId },
     /// The source failed; it will not deliver more packets.
@@ -172,9 +182,21 @@ pub struct SourceHandle {
     pub kind: SourceKind,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// Input to the source's terminal channel, when it has one.
+    terminal_tx: Option<Sender<Vec<u8>>>,
 }
 
 impl SourceHandle {
+    /// Whether the source has a terminal channel that accepts input.
+    pub fn has_terminal(&self) -> bool {
+        self.terminal_tx.is_some()
+    }
+
+    /// Send bytes to the source's terminal channel (keystrokes for the shell).
+    pub fn send_terminal(&self, bytes: &[u8]) -> bool {
+        self.terminal_tx.as_ref().is_some_and(|tx| tx.send(bytes.to_vec()).is_ok())
+    }
+
     pub fn stop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(t) = self.thread.take() {
@@ -208,6 +230,10 @@ impl SourceCtx {
 
     pub fn packet(&self, packet: Packet) -> bool {
         self.tx.send(Event::Packet { source: self.id, packet }).is_ok()
+    }
+
+    pub fn terminal(&self, data: Vec<u8>) -> bool {
+        self.tx.send(Event::Terminal { source: self.id, data }).is_ok()
     }
 
     pub fn status(&self, message: impl Into<String>) {
@@ -260,11 +286,17 @@ impl SourceManager {
         self.next_id += 1;
         let stop = Arc::new(AtomicBool::new(false));
         let ctx = SourceCtx { id, tx: self.tx.clone(), stop: stop.clone() };
+        #[allow(unused_mut, unused_assignments)]
+        let mut terminal_tx: Option<Sender<Vec<u8>>> = None;
         let thread = match &kind {
             SourceKind::Tty { path, baud } => tty::spawn(ctx, path.clone(), *baud)?,
             SourceKind::File { path } => file::spawn(ctx, path.clone())?,
             #[cfg(feature = "rtt")]
-            SourceKind::Rtt { chip, probe, channel, reset } => rtt::spawn(ctx, chip.clone(), probe.clone(), channel.clone(), *reset)?,
+            SourceKind::Rtt { chip, probe, channel, reset, terminal } => {
+                let (thread, tx) = rtt::spawn(ctx, chip.clone(), probe.clone(), channel.clone(), *reset, *terminal)?;
+                terminal_tx = tx;
+                thread
+            }
             #[cfg(not(feature = "rtt"))]
             SourceKind::Rtt { .. } => anyhow::bail!("this build has no RTT support (enable the `rtt` feature)"),
             #[cfg(target_os = "linux")]
@@ -272,8 +304,13 @@ impl SourceManager {
             #[cfg(not(target_os = "linux"))]
             SourceKind::Kernel => anyhow::bail!("the kernel monitor socket is only available on Linux"),
         };
-        self.sources.push(SourceHandle { id, kind, stop, thread: Some(thread) });
+        self.sources.push(SourceHandle { id, kind, stop, thread: Some(thread), terminal_tx });
         Ok(id)
+    }
+
+    /// Send input to a source's terminal channel.
+    pub fn send_terminal(&self, id: SourceId, bytes: &[u8]) -> bool {
+        self.get(id).is_some_and(|s| s.send_terminal(bytes))
     }
 
     /// Stop and forget a source.

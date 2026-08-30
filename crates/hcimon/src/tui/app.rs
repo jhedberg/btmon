@@ -169,7 +169,7 @@ impl AddSource {
                 }
                 let probe = self.probes.get(self.probe_idx).map(|p| p.selector.clone());
                 let channel = if self.channel.value.trim().is_empty() { None } else { Some(self.channel.value.trim().to_string()) };
-                Ok(SourceKind::Rtt { chip: chip.to_string(), probe, channel, reset: self.reset })
+                Ok(SourceKind::Rtt { chip: chip.to_string(), probe, channel, reset: self.reset, terminal: true })
             }
             AddKind::File => {
                 let path = self.path.value.trim();
@@ -632,6 +632,7 @@ impl App {
                 info.last_message = message.clone();
                 self.set_message(format!("{label}: {message}"), true);
             }
+            SourceEvent::Terminal { .. } => {}
             SourceEvent::Eof { source } => {
                 let info = self.source_info_mut(source);
                 if info.state == SourceState::Running {

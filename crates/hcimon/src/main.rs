@@ -8,6 +8,7 @@ mod output;
 mod session;
 mod source;
 mod stats;
+mod terminal;
 mod time;
 mod tui;
 
@@ -16,7 +17,6 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use ratatui::crossterm::terminal;
 
 use cli::{Cli, Color, OutputFormat};
 use output::Format;
@@ -55,6 +55,21 @@ fn run(cli: Cli) -> Result<()> {
         return Ok(());
     }
 
+    let stdout_tty = io::stdout().is_terminal();
+    let format = match cli.format {
+        OutputFormat::Text => Format::Text,
+        OutputFormat::Digest => Format::Digest,
+        OutputFormat::Jsonl => Format::Jsonl,
+        OutputFormat::Summary => Format::Summary,
+    };
+    let interactive = cli.tui || (!cli.plain && stdout_tty && format == Format::Text);
+    #[allow(unused_mut, unused_assignments)]
+    let mut rtt_terminal = false;
+    #[cfg(feature = "rtt")]
+    {
+        rtt_terminal = cli.rtt_terminal;
+    }
+
     let mut kinds: Vec<SourceKind> = Vec::new();
     for path in &cli.read {
         kinds.push(SourceKind::File { path: path.to_string_lossy().into_owned() });
@@ -64,21 +79,19 @@ fn run(cli: Cli) -> Result<()> {
     }
     #[cfg(feature = "rtt")]
     for chip in &cli.rtt {
-        kinds.push(SourceKind::Rtt { chip: chip.clone(), probe: cli.probe.clone(), channel: cli.rtt_channel.clone(), reset: cli.rtt_reset });
+        kinds.push(SourceKind::Rtt {
+            chip: chip.clone(),
+            probe: cli.probe.clone(),
+            channel: cli.rtt_channel.clone(),
+            reset: cli.rtt_reset,
+            // The UI offers the shell pane; plain mode prints the channel on request.
+            terminal: interactive || rtt_terminal,
+        });
     }
     #[cfg(target_os = "linux")]
     if cli.kernel {
         kinds.push(SourceKind::Kernel);
     }
-
-    let stdout_tty = io::stdout().is_terminal();
-    let format = match cli.format {
-        OutputFormat::Text => Format::Text,
-        OutputFormat::Digest => Format::Digest,
-        OutputFormat::Jsonl => Format::Jsonl,
-        OutputFormat::Summary => Format::Summary,
-    };
-    let interactive = cli.tui || (!cli.plain && stdout_tty && format == Format::Text);
 
     #[cfg(target_os = "linux")]
     if kinds.is_empty() && !interactive {
@@ -104,7 +117,7 @@ fn run(cli: Cli) -> Result<()> {
         Color::Never => false,
         Color::Auto => stdout_tty && std::env::var_os("NO_COLOR").is_none(),
     };
-    let columns = cli.columns.or_else(|| terminal::size().ok().map(|(w, _)| w as usize)).unwrap_or(80);
+    let columns = cli.columns.or_else(|| ratatui::crossterm::terminal::size().ok().map(|(w, _)| w as usize)).unwrap_or(80);
     let filter = match &cli.filter {
         Some(f) => Some(hcimon_decode::Query::parse(f).map_err(|e| anyhow::anyhow!("invalid filter expression: {e}"))?),
         None => None,
@@ -123,6 +136,7 @@ fn run(cli: Cli) -> Result<()> {
         columns,
         filter,
         context: cli.context,
+        rtt_terminal,
     };
 
     let mut session = Session::new(config)?;

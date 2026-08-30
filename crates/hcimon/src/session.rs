@@ -33,6 +33,8 @@ pub struct SessionConfig {
     pub filter: Option<Query>,
     /// Packets of context to print around each match in plain mode.
     pub context: usize,
+    /// Print the RTT terminal channel (shell / console) in plain mode.
+    pub rtt_terminal: bool,
 }
 
 /// A reference to another packet of the session (request/response pairing).
@@ -119,6 +121,11 @@ impl Session {
 
     pub fn add_source(&mut self, kind: SourceKind) -> Result<SourceId> {
         self.sources.add(kind)
+    }
+
+    /// Send keystrokes to a source's terminal channel (the shell over RTT).
+    pub fn send_terminal(&self, id: SourceId, bytes: &[u8]) -> bool {
+        self.sources.send_terminal(id, bytes)
     }
 
     pub fn remove_source(&mut self, id: SourceId) -> bool {
@@ -225,6 +232,8 @@ impl Session {
         let mut before: std::collections::VecDeque<Entry> = std::collections::VecDeque::new();
         let mut after_left = 0usize;
         let mut last_printed: Option<u64> = None;
+        // One terminal emulator per source with a shell / console channel.
+        let mut terminals: std::collections::HashMap<SourceId, crate::terminal::Terminal> = std::collections::HashMap::new();
         loop {
             if stop.load(Ordering::Relaxed) {
                 break;
@@ -286,6 +295,19 @@ impl Session {
                         match label {
                             Some(l) => printer.note(&format!("{l}: {message}"))?,
                             None => printer.note(&message)?,
+                        }
+                    }
+                }
+                Some(Event::Terminal { source, data }) => {
+                    if self.config.rtt_terminal && format == Format::Text {
+                        let term = terminals.entry(source).or_insert_with(|| crate::terminal::Terminal::new(2).with_size(usize::MAX / 4, 2).recording_completed());
+                        term.feed(&data);
+                        let label = self.source_label(source);
+                        for line in term.take_completed() {
+                            match &label {
+                                Some(l) => printer.shell(&format!("{l}: {line}"))?,
+                                None => printer.shell(&line)?,
+                            }
                         }
                     }
                 }

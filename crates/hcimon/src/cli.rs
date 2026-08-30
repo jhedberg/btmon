@@ -51,6 +51,11 @@ pub struct Cli {
     #[arg(long = "rtt-reset")]
     pub rtt_reset: bool,
 
+    /// In plain mode, also print what the RTT terminal channel carries (Zephyr's shell and console)
+    #[cfg(feature = "rtt")]
+    #[arg(long = "rtt-terminal")]
+    pub rtt_terminal: bool,
+
     /// Read from the Linux kernel's HCI monitor socket (default when no other source is given)
     #[cfg(target_os = "linux")]
     #[arg(short = 'K', long = "kernel")]

@@ -179,6 +179,11 @@ impl<W: Write> Printer<W> {
         writeln!(self.out, "{}= Note: {}{}", self.palette.for_style(Style::Normal), text, self.palette.off())
     }
 
+    /// A line from a source's terminal channel (Zephyr's shell or console).
+    pub fn shell(&mut self, text: &str) -> io::Result<()> {
+        writeln!(self.out, "{}= Shell: {}{}", self.palette.for_style(Style::Normal), text, self.palette.off())
+    }
+
     pub fn flush(&mut self) -> io::Result<()> {
         self.out.flush()
     }
