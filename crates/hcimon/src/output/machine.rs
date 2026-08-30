@@ -185,9 +185,12 @@ pub fn write_jsonl(w: &mut impl Write, e: &Entry, first_ts: Option<Timestamp>, s
 }
 
 /// A capture overview: what is in it, who talked to whom, what went wrong.
-pub fn write_summary(w: &mut impl Write, entries: &[Entry]) -> io::Result<()> {
+pub fn write_summary(w: &mut impl Write, entries: &[Entry], warnings: &[String]) -> io::Result<()> {
     let s = stats::collect(entries, 40);
     writeln!(w, "Packets: {} over {}", s.total, stats::span_text(s.span_us))?;
+    for warning in warnings {
+        writeln!(w, "Warning: {warning}")?;
+    }
     for (name, n, bytes) in &s.kinds {
         writeln!(w, "  {name:<16} {n:>7}  {bytes:>9} B")?;
     }

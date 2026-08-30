@@ -2,6 +2,8 @@
 
 use std::fs;
 use std::io;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use anyhow::{Context, Result};
@@ -10,12 +12,15 @@ use hcimon_capture::{btsnoop, tty::Framer, Opcode, Packet, Timestamp};
 use super::SourceCtx;
 
 pub fn spawn(ctx: SourceCtx, path: String) -> Result<JoinHandle<()>> {
-    let packets = read_all(&path)?;
+    let capture = read_capture(&path)?;
     let thread = std::thread::Builder::new()
         .name(format!("file {}", super::short_path(&path)))
         .spawn(move || {
-            ctx.status(format!("{}: {} packets", super::short_path(&path), packets.len()));
-            for p in packets {
+            ctx.status(format!("{}: {} packets", super::short_path(&path), capture.packets.len()));
+            for w in &capture.warnings {
+                ctx.warning(w.clone());
+            }
+            for p in capture.packets {
                 if ctx.stopped() || !ctx.packet(p) {
                     break;
                 }
@@ -25,8 +30,16 @@ pub fn spawn(ctx: SourceCtx, path: String) -> Result<JoinHandle<()>> {
     Ok(thread)
 }
 
+/// A capture file's packets, plus anything that went wrong reading it.
+pub struct Capture {
+    pub packets: Vec<Packet>,
+    /// A truncated final record, corrupt data or bytes that could not be
+    /// framed: the packets are usable, but the file was not clean.
+    pub warnings: Vec<String>,
+}
+
 /// Read every packet of a capture file.
-pub fn read_all(path: &str) -> Result<Vec<Packet>> {
+pub fn read_capture(path: &str) -> Result<Capture> {
     let data = fs::read(path).with_context(|| format!("failed to read {path}"))?;
     if data.starts_with(b"btsnoop\0") {
         return read_btsnoop(path, data);
@@ -40,15 +53,16 @@ pub fn read_all(path: &str) -> Result<Vec<Packet>> {
         packets.push(f.packet);
     }
     rebase_across_reboots(&mut packets);
-    if !packets.is_empty() && framer.skipped == 0 && framer.buffered() < 6 {
-        return Ok(packets);
+    if !packets.is_empty() && framer.skipped == 0 {
+        return Ok(Capture { packets, warnings: Vec::new() });
     }
     if looks_like_packetlogger(&data) {
         return read_btsnoop(path, data);
     }
     if !packets.is_empty() {
-        // Framed with some noise: still usable.
-        return Ok(packets);
+        // Framed with some noise: still usable, but say so.
+        let warning = format!("{} bytes in {} gaps of the raw stream could not be framed", framer.skipped, framer.resyncs);
+        return Ok(Capture { packets, warnings: vec![warning] });
     }
     anyhow::bail!("{path}: not a btsnoop, PacketLogger or monitor stream file")
 }
@@ -76,19 +90,42 @@ fn rebase_across_reboots(packets: &mut [Packet]) {
     }
 }
 
-fn read_btsnoop(path: &str, data: Vec<u8>) -> Result<Vec<Packet>> {
-    let mut reader = btsnoop::Reader::new(io::Cursor::new(data)).with_context(|| format!("{path}: unsupported file"))?;
+/// Byte position of the reader, for saying where a file went bad.
+struct Counting {
+    data: io::Cursor<Vec<u8>>,
+    pos: Arc<AtomicU64>,
+}
+
+impl io::Read for Counting {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = io::Read::read(&mut self.data, buf)?;
+        self.pos.fetch_add(n as u64, Ordering::Relaxed);
+        Ok(n)
+    }
+}
+
+fn read_btsnoop(path: &str, data: Vec<u8>) -> Result<Capture> {
+    let pos = Arc::new(AtomicU64::new(0));
+    let mut reader =
+        btsnoop::Reader::new(Counting { data: io::Cursor::new(data), pos: pos.clone() }).with_context(|| format!("{path}: unsupported file"))?;
     let mut packets = Vec::new();
+    let mut warnings = Vec::new();
     loop {
         match reader.read_packet() {
             Ok(Some(p)) => packets.push(p),
             Ok(None) => break,
-            // A truncated tail: keep what was read.
-            Err(_) if !packets.is_empty() => break,
+            // Keep what was read, but not quietly: a short final record is a
+            // writer that was interrupted, anything else is corruption.
+            Err(e) if !packets.is_empty() => {
+                let truncated = e.kind() == io::ErrorKind::UnexpectedEof || e.to_string().contains("truncated");
+                let what = if truncated { "truncated" } else { "corrupt" };
+                warnings.push(format!("{what} after {} packets, at byte {}: {e}", packets.len(), pos.load(Ordering::Relaxed)));
+                break;
+            }
             Err(e) => return Err(e).with_context(|| format!("{path}: read error")),
         }
     }
-    Ok(packets)
+    Ok(Capture { packets, warnings })
 }
 
 fn looks_like_packetlogger(data: &[u8]) -> bool {
@@ -135,5 +172,51 @@ mod tests {
         rebase_across_reboots(&mut packets);
         let got: Vec<u64> = packets.iter().map(ts).collect();
         assert_eq!(got, vec![5_000, 6_000, 4_000]);
+    }
+
+    fn temp(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("hcimon-test-{}-{name}", std::process::id()))
+    }
+
+    fn write_btsnoop(path: &std::path::Path, packets: usize) -> Vec<u8> {
+        let mut w = btsnoop::Writer::create(path, btsnoop::Format::Monitor).unwrap();
+        for _ in 0..packets {
+            w.write_packet(&Packet::new(Opcode::Command, 0, vec![0x03, 0x0c, 0x00])).unwrap();
+        }
+        w.flush().unwrap();
+        fs::read(path).unwrap()
+    }
+
+    #[test]
+    fn truncated_btsnoop_keeps_packets_and_warns() {
+        let path = temp("truncated.snoop");
+        let bytes = write_btsnoop(&path, 3);
+        fs::write(&path, &bytes[..bytes.len() - 5]).unwrap();
+        let cap = read_capture(path.to_str().unwrap()).unwrap();
+        assert_eq!(cap.packets.len(), 2);
+        assert_eq!(cap.warnings.len(), 1);
+        assert!(cap.warnings[0].starts_with("truncated after 2 packets, at byte "), "{}", cap.warnings[0]);
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn corrupt_btsnoop_record_warns() {
+        let path = temp("corrupt.snoop");
+        let mut bytes = write_btsnoop(&path, 2);
+        // Second record's included length: 16-byte file header, 24 + 3 byte first record.
+        bytes[16 + 27 + 4..16 + 27 + 8].copy_from_slice(&0x7fff_ffffu32.to_be_bytes());
+        fs::write(&path, &bytes).unwrap();
+        let cap = read_capture(path.to_str().unwrap()).unwrap();
+        assert_eq!(cap.packets.len(), 1);
+        assert!(cap.warnings[0].starts_with("corrupt after 1 packets, at byte 67:"), "{}", cap.warnings[0]);
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn clean_and_noisy_raw_streams() {
+        let cap = read_capture("../../testdata/xg24_peripheral_hr.tty").unwrap();
+        assert!(cap.warnings.is_empty(), "{:?}", cap.warnings);
+        let cap = read_capture("../../testdata/nrf52dk_observer_reboot.tty").unwrap();
+        assert_eq!(cap.warnings, vec!["119 bytes in 4 gaps of the raw stream could not be framed".to_string()]);
     }
 }

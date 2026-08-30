@@ -27,11 +27,14 @@ pub struct Loaded {
     pub path: String,
     pub entries: Vec<Entry>,
     pub first_ts: Option<Timestamp>,
+    /// What was wrong with the file (truncation, corruption, unframeable bytes).
+    pub warnings: Vec<String>,
 }
 
 impl Loaded {
     pub fn from_file(path: &str) -> Result<Loaded> {
-        let packets = file::read_all(path)?;
+        let capture = file::read_capture(path)?;
+        let packets = capture.packets;
         let mut ctx = Context::new();
         let source = SourceId(1);
         let label = crate::source::short_path(path).to_string();
@@ -63,7 +66,7 @@ impl Loaded {
             }
             entries.push(Entry { seq, source, packet, decoded, index, refs, findings });
         }
-        Ok(Loaded { path: path.to_string(), entries, first_ts })
+        Ok(Loaded { path: path.to_string(), entries, first_ts, warnings: capture.warnings })
     }
 
     pub fn entry(&self, seq: u64) -> Option<&Entry> {
@@ -73,7 +76,7 @@ impl Loaded {
     /// Whole-capture overview.
     pub fn summary(&self) -> String {
         let mut buf = Vec::new();
-        let _ = machine::write_summary(&mut buf, &self.entries);
+        let _ = machine::write_summary(&mut buf, &self.entries, &self.warnings);
         String::from_utf8_lossy(&buf).into_owned()
     }
 
@@ -93,6 +96,9 @@ impl Loaded {
         let matches = self.matching(filter, first, last);
         let selected = with_context(&matches, context, self.entries.len() as u64);
         let mut out = Vec::new();
+        for w in &self.warnings {
+            out.extend_from_slice(format!("warning: {w}\n").as_bytes());
+        }
         let mut prev: Option<u64> = None;
         let mut lines = 0usize;
         let mut truncated = false;

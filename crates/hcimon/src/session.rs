@@ -257,6 +257,8 @@ impl Session {
         let mut after_left = 0usize;
         let mut last_printed: Option<u64> = None;
         let mut failed = false;
+        // Sources' complaints about their data, repeated in the summary.
+        let mut warnings: Vec<String> = Vec::new();
         // One terminal emulator per source with a shell / console channel.
         let mut terminals: std::collections::HashMap<SourceId, crate::terminal::Terminal> = std::collections::HashMap::new();
         loop {
@@ -343,6 +345,13 @@ impl Session {
                         }
                     }
                 }
+                Some(Event::Warning { source, message }) => {
+                    let label = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
+                    let text = format!("{label}: {message}");
+                    printer.flush()?;
+                    eprintln!("hcimon: warning: {text}");
+                    warnings.push(text);
+                }
                 Some(Event::Error { source, message }) => {
                     failed = true;
                     let label = self.source_label(source).unwrap_or_default();
@@ -359,7 +368,7 @@ impl Session {
             }
         }
         if format == Format::Summary {
-            machine::write_summary(&mut out, &kept)?;
+            machine::write_summary(&mut out, &kept, &warnings)?;
             out.flush()?;
         }
         self.flush_writer();

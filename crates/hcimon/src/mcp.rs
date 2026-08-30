@@ -144,7 +144,11 @@ impl Server {
             }
             "count" => {
                 let l = self.load(args)?;
-                Ok(format!("{} packets match ({} in the capture)\n", l.matching(filter.as_ref(), first, last).len(), l.entries.len()))
+                let mut text = format!("{} packets match ({} in the capture)\n", l.matching(filter.as_ref(), first, last).len(), l.entries.len());
+                for w in &l.warnings {
+                    text.push_str(&format!("warning: {w}\n"));
+                }
+                Ok(text)
             }
             _ => Err(format!("unknown tool: {name}")),
         }

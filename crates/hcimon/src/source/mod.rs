@@ -168,6 +168,9 @@ pub enum Event {
     Packet { source: SourceId, packet: Packet },
     /// Human readable status change (connected, reconnecting, ...).
     Status { source: SourceId, message: String },
+    /// The source delivers, but not everything: a truncated or corrupt file,
+    /// bytes that could not be framed.  Shown where it cannot be missed.
+    Warning { source: SourceId, message: String },
     /// Bytes from the source's terminal channel (Zephyr's shell / console over RTT).
     Terminal { source: SourceId, data: Vec<u8> },
     /// The source has finished (end of file, or stopped).
@@ -238,6 +241,10 @@ impl SourceCtx {
 
     pub fn status(&self, message: impl Into<String>) {
         let _ = self.tx.send(Event::Status { source: self.id, message: message.into() });
+    }
+
+    pub fn warning(&self, message: impl Into<String>) {
+        let _ = self.tx.send(Event::Warning { source: self.id, message: message.into() });
     }
 
     pub fn error(&self, message: impl Into<String>) {

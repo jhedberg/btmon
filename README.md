@@ -67,7 +67,10 @@ $ hcimon --tty /dev/serial/by-id/usb-SEGGER_J-Link_000682451005-if00 -p
     OUI registry for public addresses.
 * **Plain mode** (`-p`, or automatically when stdout is not a terminal):
   btmon-style streaming text output, or `--format digest|jsonl|summary`
-  for scripts and LLM-based analysis (see below).
+  for scripts and LLM-based analysis (see below).  A capture file that is
+  truncated, corrupt or full of unframeable bytes is read as far as it goes
+  and says so: a warning on stderr, in the summary and in MCP results, with
+  the packet count and byte offset where reading stopped.
 * **Decoders** for HCI commands, events and LE subevents through Core
   Specification 6.3 (including Channel Sounding, PAwR, ISO, decision-based
   advertising filtering, monitored advertisers, UTP), ACL/SCO/ISO data, L2CAP

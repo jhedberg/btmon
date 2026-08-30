@@ -647,6 +647,12 @@ impl App {
                 self.source_info_mut(source).last_message = message.clone();
                 self.set_message(message, false);
             }
+            SourceEvent::Warning { source, message } => {
+                let label = self.session.sources().iter().find(|s| s.id == source).map(|s| s.kind.label()).unwrap_or_default();
+                let text = format!("{label}: {message}");
+                self.source_info_mut(source).last_message = text.clone();
+                self.set_message(text, true);
+            }
             SourceEvent::Error { source, message } => {
                 let label = self.session.sources().iter().find(|s| s.id == source).map(|s| s.kind.label()).unwrap_or_default();
                 let info = self.source_info_mut(source);
