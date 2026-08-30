@@ -12,7 +12,7 @@ use ratatui::layout::Rect;
 use ratatui::DefaultTerminal;
 
 use crate::conversations::{self, Conversation};
-use super::filter::{Category, Filter, LAYERS};
+use super::filter::{Category, Filter, Follow, LAYERS};
 use super::ui;
 use super::widgets::{flatten_tree, TextInput};
 use crate::session::{Entry, Ref, Session};
@@ -316,6 +316,14 @@ impl App {
         if entry.decoded.frame > 0 {
             self.frame_map.insert((entry.source, entry.packet.index, entry.decoded.frame), entry.seq);
         }
+        // A followed connection ends with its disconnection, or with the handle's next connection.
+        if let Some(f) = &mut self.filter.follow {
+            if f.last.is_none() {
+                if let Some(end) = f.end_at(&entry) {
+                    f.last = Some(end);
+                }
+            }
+        }
         // Resolve request/response links to session numbers and tell the request too.
         for link in &entry.decoded.links {
             if !link.kind.is_back_reference() {
@@ -488,30 +496,20 @@ impl App {
     }
 
     /// Restrict the list to one connection handle, or lift that restriction if it is already in place.
-    /// Show only one connection: its handle on its controller, between the
-    /// frames that bound it (a reused handle's earlier or later connections stay out).
+    /// Show only one connection: from its first packet to the one that ended
+    /// it, or until that arrives.  Selecting the same connection again stops.
     fn follow_conversation(&mut self, c: &Conversation) {
-        let mut expr = format!("handle == {} && index == {} && frame >= {}", c.handle, c.index, c.first_frame);
-        if !c.open {
-            expr.push_str(&format!(" && frame <= {}", c.last_frame));
-        }
-        if self.session.sources().len() > 1 {
-            if let Some(label) = self.session.sources().iter().find(|s| s.id == c.source).map(|s| s.kind.label()) {
-                expr.push_str(&format!(" && source == \"{label}\""));
-            }
-        }
-        if self.filter.expr.as_ref().map(|q| q.source() == expr).unwrap_or(false) {
-            self.filter.expr = None;
+        let follow = Follow { source: c.source, index: c.index, handle: c.handle, first: c.first, last: (!c.open).then_some(c.last) };
+        if self.filter.follow.as_ref().is_some_and(|f| (f.source, f.index, f.handle, f.first) == (follow.source, follow.index, follow.handle, follow.first)) {
+            self.filter.follow = None;
             self.rebuild_visible();
             self.set_message("no longer following a connection", false);
             return;
         }
-        if let Ok(q) = hcimon_decode::Query::parse(&expr) {
-            self.filter.expr = Some(q);
-            self.rebuild_visible();
-            let peer = if c.peer.is_empty() { String::new() } else { format!(" to {}", c.peer) };
-            self.set_message(format!("following connection handle {}{peer} ({} packets); F again to stop", c.handle, self.visible.len()), false);
-        }
+        self.filter.follow = Some(follow);
+        self.rebuild_visible();
+        let peer = if c.peer.is_empty() { String::new() } else { format!(" to {}", c.peer) };
+        self.set_message(format!("following connection handle {}{peer} ({} packets); F again to stop", c.handle, self.visible.len()), false);
     }
 
     fn follow_selected(&mut self) {

@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use hcimon_capture::Opcode;
+use hcimon_decode::Lifecycle;
 
 use crate::session::Entry;
 use crate::source::SourceId;
@@ -22,20 +23,15 @@ pub struct Conversation {
     pub rx: u64,
     /// ACL/SCO/ISO payload bytes in both directions.
     pub bytes: u64,
+    /// Session numbers of the first and last packet.
     pub first: u64,
     pub last: u64,
-    /// Decoder frame numbers of the first and last packet (for filters).
-    pub first_frame: u64,
-    pub last_frame: u64,
-    /// `false` once a Disconnection Complete for the handle was seen.
+    /// `false` once the connection was disconnected or its controller restarted.
     pub open: bool,
 }
 
-/// Whether the packet reports a connection successfully established.
-fn establishes_connection(e: &Entry) -> bool {
-    let s = &e.decoded.summary;
-    (s.starts_with("Connection Complete") || s.starts_with("LE Connection Complete") || s.starts_with("LE Enhanced Connection Complete") || s.starts_with("Synchronous Connection Complete"))
-        && e.index.get("status").next().is_some_and(|f| f.raw() == Some(0))
+fn lifecycle_handles(e: &Entry, want: fn(&Lifecycle) -> Option<u16>) -> Vec<u16> {
+    e.decoded.lifecycle.iter().filter_map(want).collect()
 }
 
 /// Connection handles referenced by a packet: `Handle:` fields (the decoders
@@ -61,18 +57,35 @@ pub fn collect(entries: &[Entry]) -> Vec<Conversation> {
     // The row currently collecting a (source, controller, handle).
     let mut current: HashMap<(SourceId, u16, u16), usize> = HashMap::new();
     for e in entries {
-        let handles = handles_of(e);
+        if e.packet.opcode == Opcode::NewIndex {
+            // The controller starts over: whatever was open on it is gone.
+            for (&(src, idx, _), &i) in &current {
+                if src == e.source && idx == e.packet.index {
+                    rows[i].open = false;
+                }
+            }
+            current.retain(|&(src, idx, _), _| !(src == e.source && idx == e.packet.index));
+            continue;
+        }
+        let established = lifecycle_handles(e, |l| if let Lifecycle::Established(h) = l { Some(*h) } else { None });
+        let closed = lifecycle_handles(e, |l| if let Lifecycle::Closed(h) = l { Some(*h) } else { None });
+        // Handles the packet mentions, plus those it established (a BIG's
+        // handles are listed, not printed as `Handle:` fields).
+        let mut handles = handles_of(e);
+        for h in &established {
+            if !handles.contains(h) {
+                handles.push(*h);
+            }
+        }
         if handles.is_empty() {
             continue;
         }
         let single = handles.len() == 1;
         let is_data = matches!(e.packet.opcode, Opcode::AclTx | Opcode::AclRx | Opcode::ScoTx | Opcode::ScoRx | Opcode::IsoTx | Opcode::IsoRx);
-        let disconnected = e.decoded.summary.starts_with("Disconnection Complete");
-        let established = establishes_connection(e);
         for h in handles {
             let key = (e.source, e.packet.index, h);
             let i = match current.get(&key).copied() {
-                Some(i) if !established => i,
+                Some(i) if !established.contains(&h) => i,
                 prior => {
                     // A new connection on this handle: the previous one is over.
                     if let Some(i) = prior {
@@ -88,8 +101,6 @@ pub fn collect(entries: &[Entry]) -> Vec<Conversation> {
                         bytes: 0,
                         first: e.seq,
                         last: e.seq,
-                        first_frame: e.decoded.frame,
-                        last_frame: e.decoded.frame,
                         open: true,
                     });
                     current.insert(key, rows.len() - 1);
@@ -98,7 +109,6 @@ pub fn collect(entries: &[Entry]) -> Vec<Conversation> {
             };
             let c = &mut rows[i];
             c.last = e.seq;
-            c.last_frame = e.decoded.frame;
             match e.decoded.prefix {
                 '<' => c.tx += 1,
                 '>' => c.rx += 1,
@@ -107,7 +117,7 @@ pub fn collect(entries: &[Entry]) -> Vec<Conversation> {
             if is_data {
                 c.bytes += e.packet.data.len().saturating_sub(4) as u64;
             }
-            if disconnected {
+            if closed.contains(&h) {
                 c.open = false;
             }
             if single && c.peer.is_empty() {
@@ -132,7 +142,8 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(i, (op, data))| {
-                let packet = Packet { ts: Some(Timestamp::Wall(i as i64 * 1000)), index: 0, opcode: *op, drops: 0, data: data.clone() };
+                let index = if *op == Opcode::SystemNote { hcimon_capture::INDEX_NONE } else { 0 };
+                let packet = Packet { ts: Some(Timestamp::Wall(i as i64 * 1000)), index, opcode: *op, drops: 0, data: data.clone() };
                 let decoded = decode(&mut ctx, &packet);
                 let index = FieldIndex::build(&decoded, &packet, PacketMeta { seq: i as u64 + 1, source: "t" });
                 Entry { seq: i as u64 + 1, source: SourceId(1), packet, decoded, index, refs: Vec::new(), findings: Vec::new() }
@@ -165,5 +176,42 @@ mod tests {
         let mut failed = vec![0x03, 0x0b, 0x04, 0x40, 0x00];
         failed.extend([1, 2, 3, 4, 5, 6, 0x01, 0x00]);
         assert_eq!(collect(&entries(&[(Opcode::Event, failed)])).len(), 1);
+    }
+
+    /// A successful LE Connection Complete for handle 64 with a peer of six `addr` bytes.
+    pub(crate) fn le_connect(addr: u8) -> Vec<u8> {
+        let mut v = vec![0x3e, 0x13, 0x01, 0x00, 0x40, 0x00, 0x00, 0x00];
+        v.extend([addr; 6]);
+        v.extend([0x18, 0, 0, 0, 0x48, 0, 0]);
+        v
+    }
+
+    #[test]
+    fn le_connections_split_on_reuse_and_bounds_are_session_numbers() {
+        let rows = collect(&entries(&[
+            // Records without a controller come first, so session numbers and
+            // decoder frame numbers differ.
+            (Opcode::SystemNote, b"boot".to_vec()),
+            (Opcode::SystemNote, b"again".to_vec()),
+            (Opcode::Event, le_connect(1)),
+            (Opcode::Event, vec![0x05, 0x04, 0x00, 0x40, 0x00, 0x13]),
+            (Opcode::Event, le_connect(2)),
+        ]));
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert_eq!((rows[0].first, rows[0].last, rows[0].open), (3, 4, false));
+        assert!(rows[0].peer.starts_with("01:01:01:01:01:01"), "{}", rows[0].peer);
+        assert_eq!((rows[1].first, rows[1].last, rows[1].open), (5, 5, true));
+        assert!(rows[1].peer.starts_with("02:02:02:02:02:02"), "{}", rows[1].peer);
+    }
+
+    #[test]
+    fn a_controller_restart_closes_its_connections() {
+        let mut ni = vec![0u8; 16];
+        ni[8..12].copy_from_slice(b"hci0");
+        let acl = vec![0x40, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00];
+        let rows = collect(&entries(&[(Opcode::Event, le_connect(1)), (Opcode::AclTx, acl.clone()), (Opcode::NewIndex, ni), (Opcode::Event, le_connect(1)), (Opcode::AclTx, acl)]));
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert!(!rows[0].open && rows[1].open);
+        assert_eq!((rows[0].last, rows[1].first), (2, 4));
     }
 }
