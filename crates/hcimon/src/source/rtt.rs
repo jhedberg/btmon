@@ -13,7 +13,7 @@ use hcimon_capture::tty::Framer;
 use probe_rs::probe::list::Lister;
 use probe_rs::probe::DebugProbeSelector;
 use probe_rs::rtt::{Rtt, ScanRegion};
-use probe_rs::{Permissions, Session};
+use probe_rs::{MemoryInterface, Permissions, Session};
 
 use super::discovery::ProbeCandidate;
 use super::{SourceCtx, TickClock};
@@ -109,6 +109,13 @@ fn find_channel(rtt: &mut Rtt, wanted: Option<&str>) -> Result<usize> {
     }
 }
 
+/// Whether every channel name reads as text: a control block that is still
+/// being initialised, or stale from a previous image, fails this.
+fn channels_sane(rtt: &mut Rtt) -> bool {
+    let ok = |name: Option<&str>| name.is_none_or(|n| n.chars().all(|c| c.is_ascii_graphic() || c == ' '));
+    rtt.up_channels().iter().all(|c| ok(c.name())) && rtt.down_channels().iter().all(|c| ok(c.name()))
+}
+
 fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Option<String>, reset: bool) {
     let mut buf = [0u8; 4096];
     let mut first_attach = true;
@@ -134,6 +141,13 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
         };
         if reset_pending {
             reset_pending = false;
+            // RAM keeps the control block of whatever ran before, and it looks
+            // valid until the new firmware initialises its own (SEGGER writes
+            // the ID last for that reason).  Blank the ID so that only the
+            // fresh block is found after the reset.
+            if let Ok(stale) = Rtt::attach_region(&mut core, &ScanRegion::Ram) {
+                let _ = core.write_8(stale.ptr(), &[0u8; 16]);
+            }
             match core.reset() {
                 Ok(()) => ctx.status(format!("{chip}: target reset")),
                 Err(e) => ctx.status(format!("{chip}: reset failed ({e})")),
@@ -145,7 +159,14 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
                 return;
             }
             match Rtt::attach_region(&mut core, &ScanRegion::Ram) {
-                Ok(r) => break r,
+                // A block whose channel names are not text is one still being
+                // set up (or left over from another image): try again shortly.
+                Ok(mut r) => {
+                    if channels_sane(&mut r) {
+                        break r;
+                    }
+                    ctx.sleep(RETRY_DELAY);
+                }
                 Err(_) => {
                     if first_attach {
                         ctx.status(format!("{chip}: waiting for the RTT control block"));
