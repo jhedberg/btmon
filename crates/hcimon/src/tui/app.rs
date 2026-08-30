@@ -488,8 +488,18 @@ impl App {
     }
 
     /// Restrict the list to one connection handle, or lift that restriction if it is already in place.
-    fn follow_handle(&mut self, handle: u16) {
-        let expr = format!("handle == {handle}");
+    /// Show only one connection: its handle on its controller, between the
+    /// frames that bound it (a reused handle's earlier or later connections stay out).
+    fn follow_conversation(&mut self, c: &Conversation) {
+        let mut expr = format!("handle == {} && index == {} && frame >= {}", c.handle, c.index, c.first_frame);
+        if !c.open {
+            expr.push_str(&format!(" && frame <= {}", c.last_frame));
+        }
+        if self.session.sources().len() > 1 {
+            if let Some(label) = self.session.sources().iter().find(|s| s.id == c.source).map(|s| s.kind.label()) {
+                expr.push_str(&format!(" && source == \"{label}\""));
+            }
+        }
         if self.filter.expr.as_ref().map(|q| q.source() == expr).unwrap_or(false) {
             self.filter.expr = None;
             self.rebuild_visible();
@@ -499,15 +509,21 @@ impl App {
         if let Ok(q) = hcimon_decode::Query::parse(&expr) {
             self.filter.expr = Some(q);
             self.rebuild_visible();
-            self.set_message(format!("following connection handle {handle} ({} packets); F again to stop", self.visible.len()), false);
+            let peer = if c.peer.is_empty() { String::new() } else { format!(" to {}", c.peer) };
+            self.set_message(format!("following connection handle {}{peer} ({} packets); F again to stop", c.handle, self.visible.len()), false);
         }
     }
 
-    /// Follow the connection of the selected packet.
     fn follow_selected(&mut self) {
         let Some(e) = self.selected_entry() else { return };
-        match conversations::handles_of(e).first() {
-            Some(&h) => self.follow_handle(h),
+        let Some(&h) = conversations::handles_of(e).first() else {
+            self.set_message("the selected packet is not tied to a connection", false);
+            return;
+        };
+        let (source, index, seq) = (e.source, e.packet.index, e.seq);
+        let rows = conversations::collect(&self.entries);
+        match rows.into_iter().find(|c| c.source == source && c.index == index && c.handle == h && c.first <= seq && seq <= c.last) {
+            Some(c) => self.follow_conversation(&c),
             None => self.set_message("the selected packet is not tied to a connection", false),
         }
     }
@@ -964,8 +980,8 @@ impl App {
                     self.popup = Some(Popup::Conversations { cursor, rows });
                 }
                 KeyCode::Enter | KeyCode::Char('F') => {
-                    if let Some(c) = rows.get(cursor) {
-                        self.follow_handle(c.handle);
+                    if let Some(c) = rows.get(cursor).cloned() {
+                        self.follow_conversation(&c);
                     }
                 }
                 KeyCode::Char('g') => {
