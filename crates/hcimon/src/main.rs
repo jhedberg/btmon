@@ -27,7 +27,7 @@ use time::TimeMode;
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(cli) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => code,
         Err(e) => {
             // A closed pipe (`hcimon ... | head`) is not an error worth reporting.
             if e.downcast_ref::<io::Error>().map(|e| e.kind() == io::ErrorKind::BrokenPipe).unwrap_or(false) {
@@ -39,12 +39,14 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cli: Cli) -> Result<()> {
+fn run(cli: Cli) -> Result<ExitCode> {
     if cli.list {
-        return list_devices();
+        list_devices()?;
+        return Ok(ExitCode::SUCCESS);
     }
     if cli.mcp {
-        return mcp::serve();
+        mcp::serve()?;
+        return Ok(ExitCode::SUCCESS);
     }
     if cli.fields {
         let loaded = match cli.read.first() {
@@ -52,7 +54,7 @@ fn run(cli: Cli) -> Result<()> {
             None => None,
         };
         print!("{}", analysis::field_dictionary(loaded.as_ref()));
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     let stdout_tty = io::stdout().is_terminal();
@@ -154,9 +156,13 @@ fn run(cli: Cli) -> Result<()> {
     }
 
     if interactive {
-        tui::run(session, errors)
+        tui::run(session, errors)?;
+        Ok(ExitCode::SUCCESS)
+    } else if session.run_plain(format)? {
+        // A source failed and said so; scripts should notice.
+        Ok(ExitCode::FAILURE)
     } else {
-        session.run_plain(format)
+        Ok(ExitCode::SUCCESS)
     }
 }
 

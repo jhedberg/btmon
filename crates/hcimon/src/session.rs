@@ -216,7 +216,10 @@ impl Session {
 
     /// Plain streaming mode: print until every source has finished, or until
     /// SIGINT/SIGTERM, which stop the sources and close the capture file cleanly.
-    pub fn run_plain(mut self, format: Format) -> Result<()> {
+    /// Stream everything to stdout until the sources are done or Ctrl-C.
+    /// Returns whether a source failed (its error has been printed), so the
+    /// caller can exit with a failure status.
+    pub fn run_plain(mut self, format: Format) -> Result<bool> {
         let stop = Arc::new(AtomicBool::new(false));
         {
             let stop = stop.clone();
@@ -232,6 +235,7 @@ impl Session {
         let mut before: std::collections::VecDeque<Entry> = std::collections::VecDeque::new();
         let mut after_left = 0usize;
         let mut last_printed: Option<u64> = None;
+        let mut failed = false;
         // One terminal emulator per source with a shell / console channel.
         let mut terminals: std::collections::HashMap<SourceId, crate::terminal::Terminal> = std::collections::HashMap::new();
         loop {
@@ -312,6 +316,7 @@ impl Session {
                     }
                 }
                 Some(Event::Error { source, message }) => {
+                    failed = true;
                     let label = self.source_label(source).unwrap_or_default();
                     printer.flush()?;
                     eprintln!("hcimon: {label}{}{message}", if label.is_empty() { "" } else { ": " });
@@ -330,7 +335,7 @@ impl Session {
             out.flush()?;
         }
         self.flush_writer();
-        Ok(())
+        Ok(failed)
     }
 }
 
