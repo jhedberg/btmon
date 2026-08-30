@@ -172,10 +172,12 @@ pub enum Event {
     /// bytes that could not be framed.  Shown where it cannot be missed.
     Warning { source: SourceId, message: String },
     /// Bytes from the source's terminal channel (Zephyr's shell / console over RTT).
+    #[cfg_attr(not(feature = "rtt"), allow(dead_code))]
     Terminal { source: SourceId, data: Vec<u8> },
     /// The source has finished (end of file, or stopped).
     Eof { source: SourceId },
     /// The source failed; it will not deliver more packets.
+    #[cfg_attr(not(feature = "rtt"), allow(dead_code))]
     Error { source: SourceId, message: String },
 }
 
@@ -235,6 +237,7 @@ impl SourceCtx {
         self.tx.send(Event::Packet { source: self.id, packet }).is_ok()
     }
 
+    #[cfg_attr(not(feature = "rtt"), allow(dead_code))]
     pub fn terminal(&self, data: Vec<u8>) -> bool {
         self.tx.send(Event::Terminal { source: self.id, data }).is_ok()
     }
@@ -247,6 +250,7 @@ impl SourceCtx {
         let _ = self.tx.send(Event::Warning { source: self.id, message: message.into() });
     }
 
+    #[cfg_attr(not(feature = "rtt"), allow(dead_code))]
     pub fn error(&self, message: impl Into<String>) {
         let _ = self.tx.send(Event::Error { source: self.id, message: message.into() });
     }
