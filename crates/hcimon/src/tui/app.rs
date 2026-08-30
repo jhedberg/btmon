@@ -240,6 +240,8 @@ pub struct App {
     should_quit: bool,
     dirty: bool,
     default_baud: u32,
+    /// Why recording stopped, for the exit status once the UI is gone.
+    recording_error: Option<String>,
 }
 
 impl App {
@@ -288,6 +290,7 @@ impl App {
             should_quit: false,
             dirty: true,
             default_baud,
+            recording_error: None,
         }
     }
 
@@ -650,7 +653,8 @@ impl App {
             SourceEvent::Packet { source, packet } => {
                 let entry = self.session.ingest(source, packet);
                 if let Some(err) = self.session.take_recording_error() {
-                    self.set_message(err, true);
+                    self.set_message(err.clone(), true);
+                    self.recording_error = Some(err);
                 }
                 if let Some(entry) = entry {
                     self.push_entry(entry);
@@ -1410,6 +1414,11 @@ fn main_loop(terminal: &mut DefaultTerminal, session: Session, startup_errors: V
     }
     let _ = stop_tx.send(());
     app.session.flush_writer();
+    // A recording that failed, now or earlier, makes the exit a failure; the
+    // terminal is restored by the caller before the reason is printed.
+    if let Some(err) = app.session.take_recording_error().or(app.recording_error.take()) {
+        anyhow::bail!("{err}");
+    }
     Ok(())
 }
 
