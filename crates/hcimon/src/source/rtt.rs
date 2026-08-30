@@ -127,6 +127,55 @@ fn find_channel(rtt: &mut Rtt, wanted: Option<&str>) -> Result<usize> {
     }
 }
 
+/// Where the last control block of a chip was found, so that the next attach
+/// can look there first instead of scanning all of RAM (which takes many
+/// seconds through some probes).
+fn cache_path() -> Option<std::path::PathBuf> {
+    let base = std::env::var_os("XDG_CACHE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".cache")))?;
+    Some(base.join("hcimon").join("rtt-control-blocks"))
+}
+
+fn cached_block(chip: &str) -> Option<u64> {
+    let text = std::fs::read_to_string(cache_path()?).ok()?;
+    text.lines().find_map(|l| {
+        let (c, addr) = l.split_once(' ')?;
+        (c == chip).then(|| u64::from_str_radix(addr.trim_start_matches("0x"), 16).ok()).flatten()
+    })
+}
+
+fn remember_block(chip: &str, addr: u64) {
+    let Some(path) = cache_path() else { return };
+    let mut lines: Vec<String> = std::fs::read_to_string(&path)
+        .map(|t| t.lines().filter(|l| l.split_once(' ').map(|(c, _)| c) != Some(chip)).map(String::from).collect())
+        .unwrap_or_default();
+    lines.push(format!("{chip} {addr:#x}"));
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, lines.join("\n") + "\n");
+}
+
+/// Find the control block: at the remembered address, giving a rebooting
+/// target a couple of seconds to set it up, then anywhere in RAM.
+fn find_block(core: &mut Core<'_>, chip: &str, ctx: &SourceCtx) -> Result<Rtt, probe_rs::rtt::Error> {
+    if let Some(addr) = cached_block(chip) {
+        for _ in 0..20 {
+            if let Ok(rtt) = Rtt::attach_region(core, &ScanRegion::Exact(addr)) {
+                return Ok(rtt);
+            }
+            if ctx.stopped() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+    let rtt = Rtt::attach_region(core, &ScanRegion::Ram)?;
+    remember_block(chip, rtt.ptr());
+    Ok(rtt)
+}
+
 /// Whether every channel name reads as text: a control block that is still
 /// being initialised, or stale from a previous image, fails this.
 fn channels_sane(rtt: &mut Rtt) -> bool {
@@ -192,20 +241,27 @@ fn run(ctx: SourceCtx, chip: String, selector: DebugProbeSelector, channel: Opti
             // valid until the new firmware initialises its own (SEGGER writes
             // the ID last for that reason).  Blank the ID so that only the
             // fresh block is found after the reset.
-            if let Ok(stale) = Rtt::attach_region(&mut core, &ScanRegion::Ram) {
+            let stale = match cached_block(&chip) {
+                Some(addr) => Rtt::attach_region(&mut core, &ScanRegion::Exact(addr)).ok(),
+                None => Rtt::attach_region(&mut core, &ScanRegion::Ram).ok(),
+            };
+            if let Some(stale) = stale {
+                remember_block(&chip, stale.ptr());
                 let _ = core.write_8(stale.ptr(), &[0u8; 16]);
             }
             match core.reset() {
                 Ok(()) => ctx.status(format!("{chip}: target reset")),
                 Err(e) => ctx.status(format!("{chip}: reset failed ({e})")),
             }
+            // Let the firmware get as far as setting up its control block.
+            ctx.sleep(Duration::from_millis(200));
         }
         // The control block may not exist until the firmware has booted.
         let mut rtt = loop {
             if ctx.stopped() {
                 return;
             }
-            match Rtt::attach_region(&mut core, &ScanRegion::Ram) {
+            match find_block(&mut core, &chip, &ctx) {
                 // A block whose channel names are not text is one still being
                 // set up (or left over from another image): try again shortly.
                 Ok(mut r) => {

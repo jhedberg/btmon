@@ -34,7 +34,9 @@ $ hcimon --tty /dev/serial/by-id/usb-SEGGER_J-Link_000682451005-if00 -p
 * **Sources** — serial port (DTR/RTS asserted, automatic reconnect when a
   board is re-plugged or re-flashed), RTT via any [probe-rs] supported debug
   probe (survives target resets, and also carries the target's shell and
-  console on the terminal channel), capture files (btsnoop with the monitor,
+  console on the terminal channel; the control block's address is remembered
+  in `~/.cache/hcimon/` so that only the first attach to a chip has to scan
+  its RAM, which takes several seconds through some probes), capture files (btsnoop with the monitor,
   HCI and H4 datalink types, Apple PacketLogger, raw monitor streams) and the
   Linux kernel monitor socket.  Several sources can be open at once.
 * **Interactive UI** (default on a terminal): scrolling packet list with
