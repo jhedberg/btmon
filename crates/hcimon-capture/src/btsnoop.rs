@@ -74,9 +74,14 @@ impl Reader {
     }
 
     pub fn new<R: Read + Send + 'static>(mut reader: R) -> io::Result<Self> {
+        // Sniff from whatever is there rather than insisting on 16 bytes: a
+        // complete PacketLogger record can be as short as 13.
         let mut hdr = [0u8; 16];
-        reader.read_exact(&mut hdr)?;
-        if &hdr[..8] == MAGIC {
+        let n = read_full(&mut reader, &mut hdr)?;
+        if n >= 8 && &hdr[..8] == MAGIC {
+            if n < 16 {
+                return Err(invalid("truncated btsnoop file header"));
+            }
             let version = u32::from_be_bytes(hdr[8..12].try_into().unwrap());
             if version != VERSION {
                 return Err(invalid(format!("unsupported btsnoop version {version}")));
@@ -87,15 +92,15 @@ impl Reader {
             return Ok(Reader { inner: Box::new(reader), kind: Kind::Btsnoop(format) });
         }
         // Apple PacketLogger has no file header; sniff the first record length.
-        let kind = if hdr[0] == 0 && (hdr[1] == 0 || hdr[1] == 1) {
+        let kind = if n >= 4 && hdr[0] == 0 && (hdr[1] == 0 || hdr[1] == 1) {
             Kind::Pklg(false)
-        } else if hdr[3] == 0 && (hdr[2] == 0 || hdr[2] == 1) {
+        } else if n >= 4 && hdr[3] == 0 && (hdr[2] == 0 || hdr[2] == 1) {
             Kind::Pklg(true)
         } else {
             return Err(invalid("not a btsnoop or PacketLogger file"));
         };
         // Push the sniffed bytes back in front of the stream.
-        let inner = Box::new(io::Cursor::new(hdr.to_vec()).chain(reader));
+        let inner = Box::new(io::Cursor::new(hdr[..n].to_vec()).chain(reader));
         Ok(Reader { inner, kind })
     }
 
@@ -423,5 +428,27 @@ mod tests {
         assert_eq!(p.ts, Some(Timestamp::Wall(10_000_005)));
         assert_eq!(p.data, vec![3, 0x0c, 0]);
         assert_eq!(r.read_packet().unwrap(), None);
+    }
+
+    #[test]
+    fn packetlogger_files_shorter_than_the_sniff_buffer() {
+        // A System Note record with 0, 1 or 2 payload bytes is a complete
+        // 13, 14 or 15 byte file.
+        for payload in [&b""[..], b"a", b"ab"] {
+            let mut buf = Vec::new();
+            buf.extend_from_slice(&(9 + payload.len() as u32).to_be_bytes());
+            buf.extend_from_slice(&((10u64 << 32) | 5).to_be_bytes());
+            buf.push(0xfc);
+            buf.extend_from_slice(payload);
+            let mut r = Reader::new(io::Cursor::new(buf)).expect("short PacketLogger file");
+            let p = r.read_packet().unwrap().unwrap();
+            assert_eq!((p.opcode, p.data.as_slice()), (Opcode::SystemNote, payload));
+            assert_eq!(r.read_packet().unwrap(), None);
+        }
+        // A record header cut short is still an error, and so is a stub of a btsnoop header.
+        let mut r = Reader::new(io::Cursor::new(vec![0, 0, 0, 9, 0, 0, 0, 10, 0, 0, 0, 5])).unwrap();
+        assert!(r.read_packet().is_err());
+        assert!(Reader::new(io::Cursor::new(b"btsnoop\0\0\0".to_vec())).is_err());
+        assert!(Reader::new(io::Cursor::new(Vec::new())).is_err());
     }
 }
