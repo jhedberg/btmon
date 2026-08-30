@@ -84,6 +84,7 @@ pub fn decode(ctx: &mut Context, pkt: &Packet) -> Decoded {
         names::learn_and_annotate(st, &mut d);
     }
     if pkt.opcode == Opcode::DelIndex {
+        d.lifecycle.push(crate::Lifecycle::ControllerRemoved);
         ctx.remove_index(pkt.index);
     }
     d
@@ -366,10 +367,17 @@ mod tests {
         assert!(d.lifecycle.is_empty());
         let d = decode(&mut ctx, &pkt(Opcode::Event, 2_000, &[0x05, 0x04, 0x00, 0x40, 0x00, 0x13]));
         assert_eq!(d.lifecycle, vec![Lifecycle::Closed(64)]);
-        // A failed connection establishes nothing.
+        // A failed connection establishes nothing, and says so.
         le[3] = 0x3e;
         let d = decode(&mut ctx, &pkt(Opcode::Event, 3_000, &le));
-        assert!(d.lifecycle.is_empty());
+        assert_eq!(d.lifecycle, vec![Lifecycle::EstablishmentFailed(64)]);
+        // Controller boundaries: New Index, a successful HCI Reset (not a failed one), Delete Index.
+        let mut ni = vec![0u8; 16];
+        ni[8..12].copy_from_slice(b"hci0");
+        assert_eq!(decode(&mut ctx, &pkt(Opcode::NewIndex, 4_000, &ni)).lifecycle, vec![Lifecycle::ControllerReset]);
+        assert_eq!(decode(&mut ctx, &pkt(Opcode::Event, 5_000, &[0x0e, 0x04, 0x01, 0x03, 0x0c, 0x0c])).lifecycle, vec![]);
+        assert_eq!(decode(&mut ctx, &pkt(Opcode::Event, 6_000, &[0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00])).lifecycle, vec![Lifecycle::ControllerReset]);
+        assert_eq!(decode(&mut ctx, &pkt(Opcode::DelIndex, 7_000, &[])).lifecycle, vec![Lifecycle::ControllerRemoved]);
     }
 
     #[test]

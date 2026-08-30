@@ -98,14 +98,22 @@ impl LinkKind {
     }
 }
 
-/// A connection coming or going, as the decoder saw it: a successful
-/// establishment of any kind (BR/EDR, synchronous, LE, CIS, BIS) or a
-/// successful disconnection.  Consumers that track connections use this
-/// rather than the wording of the packet.
+/// Connections coming and going, as the decoder saw it.  Consumers that
+/// track connections use this rather than the wording of the packet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lifecycle {
+    /// A successful establishment of any kind (BR/EDR, synchronous, LE, CIS, BIS).
     Established(u16),
+    /// An attempt to establish a connection failed; the handle the packet
+    /// carried, if any, means nothing.
+    EstablishmentFailed(u16),
+    /// A successful disconnection.
     Closed(u16),
+    /// The controller started over (New Index, a successful HCI Reset):
+    /// every connection it had is gone.
+    ControllerReset,
+    /// The controller was removed (Delete Index).
+    ControllerRemoved,
 }
 
 /// A reference from one packet to another, in per-controller frame numbers.

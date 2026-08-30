@@ -220,6 +220,8 @@ fn connection_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -
             _ => LinkType::Acl,
         };
         register_connection(st, h, link, 0, a, 0);
+    } else {
+        st.establishment_failed(h);
     }
     Ok(())
 }
@@ -479,6 +481,8 @@ fn synchronous_connection_complete(st: &mut IndexState, r: &mut Reader<'_>, out:
     if s == 0 {
         let link = if lt == 0x00 { LinkType::Sco } else { LinkType::Esco };
         register_connection(st, h, link, 0, a, 0);
+    } else {
+        st.establishment_failed(h);
     }
     Ok(())
 }

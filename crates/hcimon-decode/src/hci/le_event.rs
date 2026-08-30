@@ -228,6 +228,8 @@ fn bis_handles(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, register:
         field!(out, "Connection handle #{}: {}", i, h);
         if register {
             register_connection(st, h, LinkType::Iso, 0, BdAddr::ZERO, 0);
+        } else {
+            st.establishment_failed(h);
         }
     }
     Ok(())
@@ -273,6 +275,8 @@ fn connection_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, v
     }
     if s == 0 {
         register_connection(st, h, LinkType::Le, t, a, role);
+    } else {
+        st.establishment_failed(h);
     }
     Ok(())
 }
@@ -858,6 +862,8 @@ fn cis_established(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, v2: b
     st.pending_iso.retain(|&p| p != h);
     if s == 0 {
         register_connection(st, h, LinkType::Iso, 0, BdAddr::ZERO, 0);
+    } else {
+        st.establishment_failed(h);
     }
     Ok(())
 }

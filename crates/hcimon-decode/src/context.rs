@@ -249,12 +249,18 @@ impl IndexState {
         self.conns.get_mut(&handle).expect("just inserted")
     }
 
+    /// An attempt to establish a connection on `handle` failed.
+    pub fn establishment_failed(&mut self, handle: u16) {
+        self.lifecycle.push(crate::Lifecycle::EstablishmentFailed(handle));
+    }
+
     /// The controller started over (New Index, or a successful HCI Reset):
     /// its links, outstanding packets and settings belong to the past, as
     /// do commands sent before frame `since` (those sent after an HCI Reset
     /// command but before its completion are still going to be answered).
     /// Learned device names and the frame count stay.
     pub fn reset_controller(&mut self, since: u64) {
+        self.lifecycle.push(crate::Lifecycle::ControllerReset);
         self.conns.clear();
         self.pending_iso.clear();
         self.adv_sets.clear();
