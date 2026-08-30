@@ -20732,7 +20732,7 @@ pub static OUI: &[(u32, &str)] = &[
     (0x48b9c2, "Teletics Inc."),
     (0x48ba4e, "Hewlett Packard"),
     (0x48bc0e, "Sichuan AI-Link Technology Co., Ltd."),
-    (0x48bca6, "​ASUNG TECHNO CO.,Ltd"),
+    (0x48bca6, "ASUNG TECHNO CO.,Ltd"),
     (0x48bce1, "Samsung Electronics Co.,Ltd"),
     (0x48bd0e, "Quanta Storage Inc."),
     (0x48bd3d, "New H3C Technologies Co., Ltd"),

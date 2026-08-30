@@ -10,6 +10,7 @@ Usage:  tools/gen_oui.py [--cache DIR] [--out FILE]
 import argparse
 import csv
 import sys
+import unicodedata
 import urllib.request
 from pathlib import Path
 
@@ -36,7 +37,10 @@ def main() -> None:
                 prefix = int(rec["Assignment"], 16)
             except ValueError:
                 continue
-            name = " ".join(rec["Organization Name"].split())
+            # The registry has the odd zero-width space in a name; such format
+            # characters are invisible in output and rejected by clippy.
+            raw = "".join(c for c in rec["Organization Name"] if unicodedata.category(c) != "Cf")
+            name = " ".join(raw.split())
             rows.setdefault(prefix, name)
     lines = [
         "//! IEEE MA-L (OUI) registry: 24-bit address prefixes and their organisations.",
