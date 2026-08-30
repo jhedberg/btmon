@@ -271,7 +271,8 @@ impl Session {
                                 writeln!(out, "--")?;
                             }
                             last_printed = Some(entry.seq);
-                            let label = self.source_label(source);
+                            // Context packets may come from another source than the match.
+                            let label = self.source_label(entry.source);
                             match format {
                                 Format::Text => {
                                     printer.flush()?;
@@ -285,7 +286,7 @@ impl Session {
                                     machine::write_digest(&mut out, &entry, self.first_ts)?;
                                 }
                                 Format::Jsonl => {
-                                    let src = self.sources.get(source).map(|s| s.kind.label()).unwrap_or_default();
+                                    let src = self.sources.get(entry.source).map(|s| s.kind.label()).unwrap_or_default();
                                     machine::write_jsonl(&mut out, &entry, self.first_ts, &src)?
                                 }
                                 Format::Summary => kept.push(entry),
