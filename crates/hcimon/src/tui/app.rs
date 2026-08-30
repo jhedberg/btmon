@@ -337,7 +337,8 @@ impl App {
         self.arrivals.push_back(Instant::now());
         self.entries.push(entry);
         if self.entries.len() > self.session.config.max_packets {
-            self.drop_oldest(self.session.config.max_packets / 10);
+            // A tenth at a time, and always at least one, so small caps still bound memory.
+            self.drop_oldest((self.session.config.max_packets / 10).max(1));
         }
         if show && !self.paused {
             self.visible.push(self.entries.len() - 1);
