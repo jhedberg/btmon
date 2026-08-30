@@ -48,8 +48,10 @@ fn le_set_scan_enable(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) ->
 }
 ```
 
-* `Reader` (`src/reader.rs`) is a bounds-checked little-endian cursor:
-  `u8() u16() u24() u32() u64() i8() bytes(n) array::<N>() bdaddr() rest() sub(n) cstr() fixed_str(n)`.
+* `Reader` (`src/reader.rs`) is a bounds-checked cursor, little-endian like
+  HCI and most Bluetooth protocols:
+  `u8() u16() u24() u32() u64() i8() bytes(n) array::<N>() bdaddr() rest() sub(n) cstr() fixed_str(n)`,
+  plus `u16_be() u32_be()` for the big-endian ones (SDP, OBEX, parts of Mesh).
   Every read returns `Result<T, Truncated>`; just use `?`.  The caller reports
   the truncation and hex dumps what is left, so decoders never need to handle
   short packets themselves.

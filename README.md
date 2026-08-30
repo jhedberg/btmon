@@ -213,10 +213,12 @@ Design choices worth knowing about:
   filtering by field contents.  Decoders never panic on bad input: reads go
   through a bounds-checked cursor (`Reader`) and truncation is reported in the
   output.
-* **No parser-combinator framework.** HCI is fixed-layout little-endian
-  records; a small cursor type keeps decoders readable and makes partial
-  results on truncated packets natural.  `nom`/`winnow` were considered and
-  would mostly add ceremony here.
+* **No parser-combinator framework.** HCI, and most of what rides on it, is
+  fixed-layout little-endian records (SDP, OBEX and parts of Mesh are the
+  big-endian exceptions, and the cursor has `_be` reads for them); a small
+  cursor type keeps decoders readable and makes partial results on
+  truncated packets natural.  `nom`/`winnow` were considered and would
+  mostly add ceremony here.
 * **Generated identifier tables.** Opcode and event names come from the
   specification text (`tools/gen_hci_ids.py`), UUIDs/company IDs/AD types
   from the SIG YAML files (`tools/gen_assigned_numbers.py`), so keeping up
