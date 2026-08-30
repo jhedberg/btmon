@@ -98,6 +98,16 @@ impl LinkKind {
     }
 }
 
+/// A connection coming or going, as the decoder saw it: a successful
+/// establishment of any kind (BR/EDR, synchronous, LE, CIS, BIS) or a
+/// successful disconnection.  Consumers that track connections use this
+/// rather than the wording of the packet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lifecycle {
+    Established(u16),
+    Closed(u16),
+}
+
 /// A reference from one packet to another, in per-controller frame numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Link {
@@ -134,6 +144,8 @@ pub struct Decoded {
     pub frame: u64,
     /// Requests this packet answers.
     pub links: Vec<Link>,
+    /// Connections this packet established or closed.
+    pub lifecycle: Vec<Lifecycle>,
 }
 
 impl Decoded {

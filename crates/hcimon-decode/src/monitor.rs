@@ -25,6 +25,7 @@ impl Decoded {
             indent: 6,
             frame: 0,
             links: Vec::new(),
+            lifecycle: Vec::new(),
         }
     }
 }
@@ -79,6 +80,7 @@ pub fn decode(ctx: &mut Context, pkt: &Packet) -> Decoded {
     if pkt.index != INDEX_NONE {
         let st = ctx.index_mut(pkt.index);
         d.links = std::mem::take(&mut st.links);
+        d.lifecycle = std::mem::take(&mut st.lifecycle);
         names::learn_and_annotate(st, &mut d);
     }
     if pkt.opcode == Opcode::DelIndex {
@@ -349,6 +351,25 @@ mod tests {
         let st = ctx.index(0).unwrap();
         assert_eq!(st.name, "hci0");
         assert_eq!(st.acl_buffers, None);
+    }
+
+    #[test]
+    fn packets_report_the_connections_they_establish_and_close() {
+        use crate::Lifecycle;
+        let mut ctx = Context::new();
+        // LE Connection Complete for handle 64, then its Disconnection Complete.
+        let mut le = vec![0x3e, 0x13, 0x01, 0x00, 0x40, 0x00, 0x00, 0x00];
+        le.extend([1, 2, 3, 4, 5, 6, 0x18, 0, 0, 0, 0x48, 0, 0]);
+        let d = decode(&mut ctx, &pkt(Opcode::Event, 0, &le));
+        assert_eq!(d.lifecycle, vec![Lifecycle::Established(64)]);
+        let d = decode(&mut ctx, &pkt(Opcode::AclTx, 1_000, &[0x40, 0x00, 0x07, 0x00, 0x03, 0x00, 0x04, 0x00, 0x02, 0x17, 0x00]));
+        assert!(d.lifecycle.is_empty());
+        let d = decode(&mut ctx, &pkt(Opcode::Event, 2_000, &[0x05, 0x04, 0x00, 0x40, 0x00, 0x13]));
+        assert_eq!(d.lifecycle, vec![Lifecycle::Closed(64)]);
+        // A failed connection establishes nothing.
+        le[3] = 0x3e;
+        let d = decode(&mut ctx, &pkt(Opcode::Event, 3_000, &le));
+        assert!(d.lifecycle.is_empty());
     }
 
     #[test]

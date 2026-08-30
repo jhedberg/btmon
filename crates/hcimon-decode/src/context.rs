@@ -208,6 +208,8 @@ pub struct IndexState {
     pub acl_buffers: Option<u16>,
     /// Manufacturer-specific event prefix (Microsoft extension) if configured.
     pub msft_evt_prefix: Vec<u8>,
+    /// Connections established or closed by the packet being decoded.
+    pub lifecycle: Vec<crate::Lifecycle>,
 }
 
 /// Bookkeeping for an extended advertising set.
@@ -233,6 +235,7 @@ impl IndexState {
     /// Forget a connection and everything else keyed by its handle.
     pub fn remove_conn(&mut self, handle: u16) -> Option<Connection> {
         self.acl_outstanding.remove(&handle);
+        self.lifecycle.push(crate::Lifecycle::Closed(handle));
         self.conns.remove(&handle)
     }
 
@@ -241,6 +244,7 @@ impl IndexState {
     pub fn establish_conn(&mut self, conn: Connection) -> &mut Connection {
         let handle = conn.handle;
         self.acl_outstanding.remove(&handle);
+        self.lifecycle.push(crate::Lifecycle::Established(handle));
         self.conns.insert(handle, conn);
         self.conns.get_mut(&handle).expect("just inserted")
     }
