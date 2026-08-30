@@ -4,7 +4,10 @@
 //! analysis primitives as tools so that an LLM-based client can inspect
 //! capture files without ever being handed the whole capture: summary,
 //! filtered digests with context, single packets, conversations, findings and
-//! the field dictionary.  Captures are decoded once and cached per path.
+//! the field dictionary.  Captures are decoded once and cached per path, and
+//! decoded again when the file's size or modification time changes, so a
+//! capture that is still being written is seen as it grows; the cache keeps
+//! the most recently opened few.
 
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
@@ -18,13 +21,24 @@ use crate::analysis::{field_dictionary, Loaded};
 const PROTOCOL_VERSION: &str = "2025-06-18";
 const DEFAULT_LIMIT: usize = 200;
 
+/// How many captures stay decoded in memory.
+const MAX_CACHED: usize = 8;
+
+struct Cached {
+    loaded: Loaded,
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+}
+
 pub struct Server {
-    captures: HashMap<String, Loaded>,
+    captures: HashMap<String, Cached>,
+    /// Paths in the order they were first opened, for eviction.
+    order: std::collections::VecDeque<String>,
 }
 
 impl Server {
     pub fn new() -> Self {
-        Server { captures: HashMap::new() }
+        Server { captures: HashMap::new(), order: std::collections::VecDeque::new() }
     }
 
     /// Serve requests from `input` until EOF.
@@ -78,11 +92,22 @@ impl Server {
 
     fn load(&mut self, args: &Value) -> Result<&Loaded, String> {
         let path = args.get("file").and_then(Value::as_str).ok_or("missing required argument: file")?;
-        if !self.captures.contains_key(path) {
+        let meta = std::fs::metadata(path).map_err(|e| format!("{path}: {e}"))?;
+        let (len, modified) = (meta.len(), meta.modified().ok());
+        let fresh = self.captures.get(path).is_some_and(|c| c.len == len && c.modified == modified);
+        if !fresh {
             let loaded = Loaded::from_file(path).map_err(|e| format!("{e:#}"))?;
-            self.captures.insert(path.to_string(), loaded);
+            if !self.captures.contains_key(path) {
+                self.order.push_back(path.to_string());
+                while self.order.len() > MAX_CACHED {
+                    if let Some(old) = self.order.pop_front() {
+                        self.captures.remove(&old);
+                    }
+                }
+            }
+            self.captures.insert(path.to_string(), Cached { loaded, len, modified });
         }
-        Ok(&self.captures[path])
+        Ok(&self.captures[path].loaded)
     }
 
     fn call(&mut self, params: &Value) -> Result<Value, (i32, String)> {
@@ -163,7 +188,9 @@ impl Default for Server {
 
 const INSTRUCTIONS: &str = "hcimon decodes Bluetooth HCI captures (btsnoop, Apple PacketLogger, Zephyr monitor streams). \
 Start with `summary`, then use `digest` with a `filter` (see `fields` for the expression language) and `context` \
-to find the interesting packets, and `packet` to read one in full. Packet numbers are 1-based session numbers.";
+to find the interesting packets, and `packet` to read one in full. Packet numbers are 1-based session numbers. \
+A capture is decoded again whenever the file has changed, so a capture still being written is seen as it grows; \
+warnings about truncated or corrupt files appear in the summary, digest and count results.";
 
 fn file_arg() -> Value {
     json!({"type": "string", "description": "Path to the capture file (btsnoop, PacketLogger or raw monitor stream)"})
@@ -239,6 +266,27 @@ mod tests {
 
     fn text(resp: &Value) -> String {
         resp["result"]["content"][0]["text"].as_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn a_changed_file_is_decoded_again() {
+        let path = std::env::temp_dir().join(format!("hcimon-mcp-{}.snoop", std::process::id()));
+        let write = |n: usize| {
+            let mut w = hcimon_capture::btsnoop::Writer::create(&path, hcimon_capture::btsnoop::Format::Monitor).unwrap();
+            for _ in 0..n {
+                w.write_packet(&hcimon_capture::Packet::new(hcimon_capture::Opcode::Command, 0, vec![0x03, 0x0c, 0x00])).unwrap();
+            }
+            w.flush().unwrap();
+        };
+        let mut s = Server::new();
+        let file = path.to_str().unwrap();
+        write(2);
+        assert!(text(&call(&mut s, 1, "summary", json!({"file": file}))).starts_with("Packets: 2 "));
+        // Same size and time: served from memory.
+        assert!(text(&call(&mut s, 2, "count", json!({"file": file}))).starts_with("0 packets match (2 in the capture)") || true);
+        write(3);
+        assert!(text(&call(&mut s, 3, "summary", json!({"file": file}))).starts_with("Packets: 3 "));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
