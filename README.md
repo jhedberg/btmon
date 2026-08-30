@@ -177,8 +177,10 @@ arrangements that work are:
   hcimon reads both through its one probe session: the shell appears in a
   pane of the UI (`T` shows and hides it, `Tab` or a click moves the keyboard
   into it, `Esc` gives it back; it opens by itself on the first output), with
-  keystrokes written to the down-buffer.  No UART is needed at all.  One
-  caveat: Zephyr writes RTT buffers in `NO_BLOCK_SKIP` mode, so a burst of
+  keystrokes written to the down-buffer.  No UART is needed at all.  When the
+  firmware floods the shell (the observer sample prints every advertiser it
+  sees), a command's reply scrolls out of the pane at once: PgUp brings it
+  back, or quiet the output first (`bt scan off`).  One caveat: Zephyr writes RTT buffers in `NO_BLOCK_SKIP` mode, so a burst of
   shell output larger than the up-buffer loses chunks (16 bytes at a time)
   and the pane shows lines with holes — with the 1 KB default and `bt scan
   on` printing a hundred reports a second, about one line in twelve was hit;
