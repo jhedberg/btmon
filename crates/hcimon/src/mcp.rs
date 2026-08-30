@@ -34,11 +34,19 @@ pub struct Server {
     captures: HashMap<String, Cached>,
     /// Paths in the order they were first opened, for eviction.
     order: std::collections::VecDeque<String>,
+    /// How many times a capture was decoded (tests tell a cache hit from a reload by it).
+    #[cfg(test)]
+    decodes: usize,
 }
 
 impl Server {
     pub fn new() -> Self {
-        Server { captures: HashMap::new(), order: std::collections::VecDeque::new() }
+        Server {
+            captures: HashMap::new(),
+            order: std::collections::VecDeque::new(),
+            #[cfg(test)]
+            decodes: 0,
+        }
     }
 
     /// Serve requests from `input` until EOF.
@@ -97,6 +105,10 @@ impl Server {
         let fresh = self.captures.get(path).is_some_and(|c| c.len == len && c.modified == modified);
         if !fresh {
             let loaded = Loaded::from_file(path).map_err(|e| format!("{e:#}"))?;
+            #[cfg(test)]
+            {
+                self.decodes += 1;
+            }
             if !self.captures.contains_key(path) {
                 self.order.push_back(path.to_string());
                 while self.order.len() > MAX_CACHED {
@@ -283,9 +295,11 @@ mod tests {
         write(2);
         assert!(text(&call(&mut s, 1, "summary", json!({"file": file}))).starts_with("Packets: 2 "));
         // Same size and time: served from memory.
-        assert!(text(&call(&mut s, 2, "count", json!({"file": file}))).starts_with("0 packets match (2 in the capture)") || true);
+        assert!(text(&call(&mut s, 2, "count", json!({"file": file}))).starts_with("2 packets match (2 in the capture)"));
+        assert_eq!(s.decodes, 1);
         write(3);
         assert!(text(&call(&mut s, 3, "summary", json!({"file": file}))).starts_with("Packets: 3 "));
+        assert_eq!(s.decodes, 2);
         let _ = std::fs::remove_file(&path);
     }
 
