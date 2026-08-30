@@ -180,10 +180,11 @@ arrangements that work are:
   keystrokes written to the down-buffer.  No UART is needed at all.  When the
   firmware floods the shell (the observer sample prints every advertiser it
   sees), a command's reply scrolls out of the pane at once: PgUp brings it
-  back, or quiet the output first (`bt scan off`).  One caveat: Zephyr writes RTT buffers in `NO_BLOCK_SKIP` mode, so a burst of
-  shell output larger than the up-buffer loses chunks (16 bytes at a time)
-  and the pane shows lines with holes — with the 1 KB default and `bt scan
-  on` printing a hundred reports a second, about one line in twelve was hit;
+  back, or quiet the output first (`bt scan off`).  One caveat: Zephyr
+  writes RTT buffers in `NO_BLOCK_SKIP` mode, so a burst of shell output
+  larger than the up-buffer loses chunks (16 bytes at a time) and the pane
+  shows lines with holes — with the 1 KB default and `bt scan on` printing a
+  hundred reports a second, about one line in twelve was hit;
   `CONFIG_SEGGER_RTT_BUFFER_SIZE_UP=4096` leaves room for such bursts.
 * **Two UARTs** — point the monitor at the second one with a
   `zephyr,bt-mon-uart` chosen node in a devicetree overlay and keep console
@@ -214,11 +215,11 @@ Design choices worth knowing about:
   through a bounds-checked cursor (`Reader`) and truncation is reported in the
   output.
 * **No parser-combinator framework.** HCI, and most of what rides on it, is
-  fixed-layout little-endian records (SDP, OBEX and parts of Mesh are the
-  big-endian exceptions, and the cursor has `_be` reads for them); a small
-  cursor type keeps decoders readable and makes partial results on
-  truncated packets natural.  `nom`/`winnow` were considered and would
-  mostly add ceremony here.
+  fixed-layout little-endian records; the cursor has `_be` reads for the
+  big-endian exceptions (SDP today; OBEX and parts of Mesh, should they
+  ever be decoded).  A small cursor type keeps decoders readable and makes
+  partial results on truncated packets natural.  `nom`/`winnow` were
+  considered and would mostly add ceremony here.
 * **Generated identifier tables.** Opcode and event names come from the
   specification text (`tools/gen_hci_ids.py`), UUIDs/company IDs/AD types
   from the SIG YAML files (`tools/gen_assigned_numbers.py`), so keeping up
