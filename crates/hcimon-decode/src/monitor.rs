@@ -435,13 +435,16 @@ mod tests {
 
 #[cfg(test)]
 mod fuzz {
-    //! Mutation fuzzing of the whole decode pipeline over the sample capture:
+    //! Mutation fuzzing of the whole decode pipeline over the sample captures:
     //! every packet truncated at every length and with every byte flipped,
     //! decoded through a shared context (so state-dependent paths run too),
     //! then indexed and assessed.  Nothing may panic.
     use super::*;
     use crate::expert;
     use crate::query::{FieldIndex, PacketMeta};
+    use crate::tree::Style;
+    use crate::Lifecycle;
+    use hcimon_capture::btsnoop;
     use hcimon_capture::tty::Framer;
 
     fn sample() -> Vec<Packet> {
@@ -454,6 +457,17 @@ mod fuzz {
         v
     }
 
+    /// Core 7.0 traffic of two BlueZ emulator controllers (`tools/btvirt_core70.py`).
+    fn btvirt_core70() -> Vec<Packet> {
+        let data: &'static [u8] = include_bytes!("../../../testdata/btvirt_core70.snoop");
+        let mut r = btsnoop::Reader::new(std::io::Cursor::new(data)).unwrap();
+        let mut v = Vec::new();
+        while let Some(p) = r.read_packet().unwrap() {
+            v.push(p);
+        }
+        v
+    }
+
     fn run(ctx: &mut Context, pkt: &Packet) {
         let d = decode(ctx, pkt);
         let ix = FieldIndex::build(&d, pkt, PacketMeta { seq: 1, source: "fuzz" });
@@ -461,13 +475,11 @@ mod fuzz {
         let _ = d.lines();
     }
 
-    #[test]
-    fn mutated_packets_never_panic() {
-        let packets = sample();
-        assert!(packets.len() > 100);
+    /// Decode every mutation of every packet; returns the number of decodes.
+    fn mutate_all(packets: &[Packet]) -> usize {
         let mut ctx = Context::new();
         let mut decodes = 0usize;
-        for p in &packets {
+        for p in packets {
             // Truncations.
             for len in 0..p.data.len() {
                 let mut m = p.clone();
@@ -491,7 +503,66 @@ mod fuzz {
             run(&mut ctx, p);
             decodes += 2;
         }
+        decodes
+    }
+
+    #[test]
+    fn mutated_packets_never_panic() {
+        let packets = sample();
+        assert!(packets.len() > 100);
+        let decodes = mutate_all(&packets);
         assert!(decodes > 10_000, "{decodes}");
+    }
+
+    #[test]
+    fn mutated_core70_packets_never_panic() {
+        let packets = btvirt_core70();
+        assert!(packets.len() > 100);
+        let decodes = mutate_all(&packets);
+        assert!(decodes > 10_000, "{decodes}");
+    }
+
+    #[test]
+    fn btvirt_core70_capture() {
+        let mut ctx = Context::new();
+        let mut lines = Vec::new();
+        let mut lifecycle = Vec::new();
+        for p in &btvirt_core70() {
+            let d = decode(&mut ctx, p);
+            for n in &d.fields {
+                n.walk(0, &mut |_, node| assert_ne!(node.style, Style::Error, "{}: {}", d.summary, node.text));
+            }
+            lines.extend(d.lines().into_iter().map(|l| l.trim().to_string()));
+            lifecycle.extend(d.lifecycle.iter().map(|l| (p.index, *l)));
+        }
+        for want in [
+            "LE Set CIG Parameters v2 (Octet 51 - Bit 0)",
+            "Max TX Payload Window size: 4",
+            "TX PHY: LE HDT (0x05)",
+            "PHYs: HDT (0x01)",
+            "MIC Length: Prefer 64 bits (0x01)",
+            "Key Schedule: AES-CCM (0x01)",
+            "MIC length: 128 bits (0x02)",
+            "Error: MIC Length Too Short (0x14)",
+            "Result: Connection refused - MIC length too short (0x000c)",
+            "Central to Peripheral PHY: LE HDT (0x05)",
+            "Central to Peripheral rates: 0x001f",
+            "Rates: 0x001f",
+        ] {
+            assert!(lines.iter().any(|l| l == want), "missing {want:?}");
+        }
+        // The CIS (v3) and the BIS (v2) are established like those of the earlier versions.
+        for want in [
+            (0, Lifecycle::Established(1)),
+            (1, Lifecycle::Established(1)),
+            (0, Lifecycle::Established(256)),
+            (1, Lifecycle::Established(256)),
+            (0, Lifecycle::Established(512)),
+            (0, Lifecycle::Closed(1)),
+            (1, Lifecycle::Closed(1)),
+        ] {
+            assert!(lifecycle.contains(&want), "missing {want:?} in {lifecycle:?}");
+        }
     }
 
     #[test]
