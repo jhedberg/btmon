@@ -890,7 +890,8 @@ fn sync_cte_type(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     Ok(v)
 }
 
-fn receiver_test(r: &mut Reader<'_>, out: &mut Out, version: u8) -> Result<()> {
+/// LE Receiver Test v1 to v4; v4 (in `cmd_le_b`) adds the LE HDT PHY SNR measurements.
+pub(super) fn receiver_test(r: &mut Reader<'_>, out: &mut Out, version: u8) -> Result<()> {
     channel_frequency("RX channel", r, out)?;
     if version >= 2 {
         phy("PHY", r, out)?;
@@ -901,6 +902,9 @@ fn receiver_test(r: &mut Reader<'_>, out: &mut Out, version: u8) -> Result<()> {
         cte_type("Expected CTE type", r, out)?;
         slot_durations(r, out)?;
         switching_pattern(r, out)?;
+    }
+    if version >= 4 {
+        enum8("HDT SNR test", r, out, &[(0x00, "Disabled"), (0x01, "Enabled")])?;
     }
     Ok(())
 }

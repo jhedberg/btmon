@@ -73,7 +73,9 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
             enable("Local reporting", r, out)?;
             enable("Remote reporting", r, out)?;
         }
-        cmd::LE_TRANSMITTER_TEST_V4 => transmitter_test_v4(r, out)?,
+        cmd::LE_TRANSMITTER_TEST_V4 => transmitter_test_v4(r, out, false)?,
+        cmd::LE_TRANSMITTER_TEST_V5 => transmitter_test_v4(r, out, true)?,
+        cmd::LE_RECEIVER_TEST_V4 => super::cmd_le_a::receiver_test(r, out, 4)?,
         cmd::LE_SET_DATA_RELATED_ADDRESS_CHANGES => {
             u8_hex("Handle", r, out)?;
             mask8(
@@ -184,6 +186,13 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
             super::cmd_le_a::data_length(r, out)?;
             data_length_phys(r, out)?;
         }
+        cmd::LE_SET_HDT_PARAMETERS_TEST => {
+            handle(st, r, out)?;
+            hdt_mic_length(r, out)?;
+            packet_format(r, out)?;
+            u8_field("Blocks per Payload", r, out)?;
+            hdt_rates("TX Rates", r, out)?;
+        }
         cmd::LE_SET_HDT_DEFAULT_PARAMETERS => {
             hdt_mic_length(r, out)?;
             packet_format(r, out)?;
@@ -255,7 +264,8 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
         | cmd::LE_CS_WRITE_CACHED_REMOTE_FAE_TABLE
         | cmd::LE_CS_SET_PROCEDURE_PARAMETERS
         | cmd::LE_CS_SET_SECURITY_REQUIREMENTS
-        | cmd::LE_SET_DATA_LENGTH_V2 => {
+        | cmd::LE_SET_DATA_LENGTH_V2
+        | cmd::LE_SET_HDT_PARAMETERS_TEST => {
             if status_only(r, out)? {
                 return Ok(true);
             }
@@ -328,6 +338,13 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
             u8_field("List size", r, out)?;
         }
         cmd::LE_READ_MINIMUM_SUPPORTED_CONNECTION_INTERVAL => read_min_supported_conn_interval_rsp(r, out)?,
+        cmd::LE_TEST_END_V2 => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            u16_field("Number of packets", r, out)?;
+            u16_field("Number of blocks", r, out)?;
+        }
         cmd::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_V2 => {
             if status_only(r, out)? {
                 return Ok(true);
@@ -679,7 +696,51 @@ static TEST_PAYLOADS: &[(u8, &str)] = &[
     (0x80, "User payload"),
 ];
 
-fn transmitter_test_v4(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// The LE HDT PHY parameters of LE Transmitter Test v5 (7.8.29): rate, packet format, payload
+/// length and, for packet format 1, the blocks of each of the four LL Descriptors.
+fn transmitter_test_hdt(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    enum8(
+        "HDT rate indicator",
+        r,
+        out,
+        &[
+            (0x00, "Short format"),
+            (0x01, "HDT 2M"),
+            (0x02, "HDT 3M"),
+            (0x03, "HDT 4M"),
+            (0x04, "HDT 6M"),
+            (0x05, "HDT 7.5M"),
+        ],
+    )?;
+    enum8(
+        "HDT packet format indicator",
+        r,
+        out,
+        &[(0x00, "Short format or packet format 0"), (0x01, "Packet format 1")],
+    )?;
+    u16_field("HDT payload length", r, out)?;
+    enum8(
+        "HDT PHY interval",
+        r,
+        out,
+        &[(0x00, "PHY INT 0b00"), (0x01, "PHY INT 0b01"), (0x02, "PHY INT 0b10"), (0x03, "PHY INT 0b11")],
+    )?;
+    // HDT_Num_Blocks[i], HDT_Block_Size[i] and HDT_Final_Block_Size[i] are interleaved per descriptor.
+    for i in 0..4 {
+        let blocks = r.u8()?;
+        let size = r.u16()?;
+        let last = r.u16()?;
+        out.group(format!("Descriptor {i}"), |o| {
+            field!(o, "Number of blocks: {}", blocks);
+            field!(o, "Block size: {}", size);
+            field!(o, "Final block size: {}", last);
+        });
+    }
+    Ok(())
+}
+
+/// LE Transmitter Test v4 and v5; v5 adds the LE HDT PHY and its packet layout.
+fn transmitter_test_v4(r: &mut Reader<'_>, out: &mut Out, v5: bool) -> Result<()> {
     let ch = r.u8()?;
     field!(out, "TX channel: {} MHz (0x{:02x})", ch as u32 * 2 + 2402, ch);
     u8_field("Length of test data", r, out)?;
@@ -701,6 +762,9 @@ fn transmitter_test_v4(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
         127 => field!(out, "TX power: Maximum (0x7f)"),
         _ => field!(out, "TX power: {} dbm (0x{:02x})", p, p as u8),
     };
+    if v5 {
+        transmitter_test_hdt(r, out)?;
+    }
     Ok(())
 }
 
@@ -1664,6 +1728,71 @@ mod tests {
                 "Antenna ID: 2",
                 "TX power: Maximum (0x7f)",
             ]
+        );
+    }
+
+    #[test]
+    fn hdt_test_commands() {
+        let mut st = IndexState::default();
+        let mut data = vec![0x13, 0x25, 0x00, 0x05, 0x00, 0x00, 0x00, 0x7e, 0x05, 0x01, 0x00, 0x01, 0x02];
+        data.extend_from_slice(&[0x03, 0x00, 0x01, 0x40, 0x00]);
+        data.extend_from_slice(&[0x00; 15]);
+        let lines = cmd_lines(&mut st, cmd::LE_TRANSMITTER_TEST_V5, &data);
+        assert_eq!(
+            lines[3..],
+            [
+                "PHY: LE HDT (0x05)",
+                "CTE length: No CTE (0x00)",
+                "CTE type: AoA (0x00)",
+                "Switching pattern length: 0",
+                "TX power: Minimum (0x7e)",
+                "HDT rate indicator: HDT 7.5M (0x05)",
+                "HDT packet format indicator: Packet format 1 (0x01)",
+                "HDT payload length: 256",
+                "HDT PHY interval: PHY INT 0b10 (0x02)",
+                "Descriptor 0",
+                "  Number of blocks: 3",
+                "  Block size: 256",
+                "  Final block size: 64",
+                "Descriptor 1",
+                "  Number of blocks: 0",
+                "  Block size: 0",
+                "  Final block size: 0",
+                "Descriptor 2",
+                "  Number of blocks: 0",
+                "  Block size: 0",
+                "  Final block size: 0",
+                "Descriptor 3",
+                "  Number of blocks: 0",
+                "  Block size: 0",
+                "  Final block size: 0",
+            ]
+        );
+
+        let data = [0x00, 0x05, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01];
+        let lines = cmd_lines(&mut st, cmd::LE_RECEIVER_TEST_V4, &data);
+        assert_eq!(lines[1], "PHY: LE HDT (0x05)");
+        assert_eq!(lines.last().unwrap(), "HDT SNR test: Enabled (0x01)");
+
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_TEST_END_V2, &[0x00, 0x10, 0x00, 0x40, 0x00]),
+            ["Status: Success (0x00)", "Number of packets: 16", "Number of blocks: 64"]
+        );
+
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_SET_HDT_PARAMETERS_TEST, &[0x01, 0x00, 0x01, 0x02, 0x10, 0x02, 0x00]),
+            [
+                "Handle: 1",
+                "MIC Length: Prefer 64 bits (0x01)",
+                "Packet Format: Packet Format 1 (0x02)",
+                "Blocks per Payload: 16",
+                "TX Rates: 0x0002",
+                "  HDT 3M",
+            ]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_SET_HDT_PARAMETERS_TEST, &[0x00, 0x01, 0x00]),
+            ["Status: Success (0x00)", "Handle: 1"]
         );
     }
 

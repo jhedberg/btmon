@@ -24,6 +24,7 @@ pub fn le_event_params(st: &mut IndexState, sub: u8, r: &mut Reader<'_>, out: &m
         le_evt::REMOTE_CONNECTION_PARAMETER_REQUEST => remote_connection_parameter_request(st, r, out)?,
         le_evt::DATA_LENGTH_CHANGE => data_length_change(st, r, out, false)?,
         le_evt::DATA_LENGTH_CHANGE_V2 => data_length_change(st, r, out, true)?,
+        le_evt::TEST_REPORT_HDT_LINK_QUALITY => test_report_hdt_link_quality(r, out)?,
         le_evt::READ_LOCAL_P_256_PUBLIC_KEY_COMPLETE => read_local_p256_public_key_complete(r, out)?,
         le_evt::GENERATE_DHKEY_COMPLETE => generate_dhkey_complete(r, out)?,
         le_evt::ENHANCED_CONNECTION_COMPLETE => connection_complete(st, r, out, ConnComplete::EnhancedV1)?,
@@ -314,6 +315,31 @@ fn remote_connection_parameter_request(st: &IndexState, r: &mut Reader<'_>, out:
 }
 
 /// LE Data Length Change (7.7.65.7).
+/// LE Test Report HDT Link Quality (0x3c, 7.7.65.51): the RSSI and SNR of each LE HDT PHY test
+/// packet received, in the order of reception (RSSI[i] and SNR[i] interleaved).
+fn test_report_hdt_link_quality(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    let ch = r.u8()?;
+    match ch {
+        0x00..=0x27 => field!(out, "Channel index: {}", ch),
+        _ => out.unknown(format!("Channel index: Reserved (0x{ch:02x})")),
+    };
+    enum8("Report status", r, out, &[(0x00, "Final report"), (0x01, "More reports to follow")])?;
+    let n = u8_field("Report count", r, out)?;
+    for i in 0..n {
+        let rssi = r.i8()?;
+        let snr = r.u8()?;
+        out.group(format!("Packet {i}"), |o| {
+            rssi_value("RSSI", o, rssi);
+            match snr {
+                0x1f => field!(o, "SNR: not available (0x1f)"),
+                0x00..=0x1e => field!(o, "SNR: {} dB (0x{:02x})", snr, snr),
+                _ => o.unknown(format!("SNR: Reserved (0x{snr:02x})")),
+            };
+        });
+    }
+    Ok(())
+}
+
 /// LE Data Length Change v1 (0x07) and v2 (0x39, adds whether the lengths are those of the LE HDT
 /// PHY).
 fn data_length_change(st: &IndexState, r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
@@ -1457,6 +1483,17 @@ mod tests {
                 "PHYs: HDT (0x01)",
             ]
         );
+    }
+
+    #[test]
+    fn test_report_hdt_link_quality_params() {
+        let (_, nodes) = run(le_evt::TEST_REPORT_HDT_LINK_QUALITY, &[0x13, 0x00, 0x02, 0xce, 0x14, 0x7f, 0x1f]);
+        assert_eq!(
+            texts(&nodes),
+            ["Channel index: 19", "Report status: Final report (0x00)", "Report count: 2", "Packet 0", "Packet 1"]
+        );
+        assert_eq!(child_texts(&nodes[3]), ["RSSI: -50 dBm (0xce)", "SNR: 20 dB (0x14)"]);
+        assert_eq!(child_texts(&nodes[4]), ["RSSI: not available (0x7f)", "SNR: not available (0x1f)"]);
     }
 
     #[test]
