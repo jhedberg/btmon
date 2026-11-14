@@ -579,6 +579,16 @@ pub fn mask16(label: &str, r: &mut Reader<'_>, out: &mut Out, names: &[(u8, &str
     Ok(v)
 }
 
+/// Eight-byte bit mask: `Label: 0x.. 0x..` followed by one child per set bit.
+pub fn mask64(label: &str, r: &mut Reader<'_>, out: &mut Out, names: &[(u8, &str)]) -> Result<u64> {
+    let b = r.array::<8>()?;
+    let mask = u64::from_le_bytes(b);
+    let hex: Vec<String> = b.iter().map(|x| format!("0x{x:02x}")).collect();
+    field!(out, "{}: {}", label, hex.join(" "));
+    out.nest(|o| bits(o, mask, names, 64));
+    Ok(mask)
+}
+
 /// `Role: Central (0x00)` / `Peripheral (0x01)`.
 pub fn role(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     enum8("Role", r, out, &[(0x00, "Central"), (0x01, "Peripheral")])

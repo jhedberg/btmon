@@ -85,16 +85,6 @@ pub fn event_params(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> R
 // Helpers private to this module
 // ---------------------------------------------------------------------------
 
-/// Print an 8-byte mask as `Label: 0x.. 0x..` with one child per set bit.
-fn mask64(label: &str, r: &mut Reader<'_>, out: &mut Out, names: &[(u8, &str)]) -> Result<u64> {
-    let b = r.array::<8>()?;
-    let mask = u64::from_le_bytes(b);
-    let hex: Vec<String> = b.iter().map(|x| format!("0x{x:02x}")).collect();
-    field!(out, "{}: {}", label, hex.join(" "));
-    out.nest(|o| bits(o, mask, names, 64));
-    Ok(mask)
-}
-
 /// Print a one-byte value with a name from `names`, or `Unknown` (not flagged) when absent.
 fn named8(label: &str, r: &mut Reader<'_>, out: &mut Out, names: &[(u8, &str)]) -> Result<u8> {
     let v = r.u8()?;

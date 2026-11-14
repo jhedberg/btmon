@@ -125,6 +125,13 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
             enable("CS procedures", r, out)?;
         }
         cmd::LE_CS_TEST => cs_test(r, out)?,
+        cmd::LE_CS_SET_SECURITY_REQUIREMENTS => {
+            handle(st, r, out)?;
+            cs_security_requirements(r, out)?;
+        }
+        cmd::LE_CS_SET_DEFAULT_SECURITY_REQUIREMENTS => {
+            cs_security_requirements(r, out)?;
+        }
         cmd::LE_ADD_DEVICE_TO_MONITORED_ADVERTISERS_LIST => {
             peer_addr(r, out)?;
             rssi_labelled("RSSI low threshold", r, out)?;
@@ -213,7 +220,8 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
         | cmd::LE_CS_WRITE_CACHED_REMOTE_SUPPORTED_CAPABILITIES_V2
         | cmd::LE_CS_SET_DEFAULT_SETTINGS
         | cmd::LE_CS_WRITE_CACHED_REMOTE_FAE_TABLE
-        | cmd::LE_CS_SET_PROCEDURE_PARAMETERS => {
+        | cmd::LE_CS_SET_PROCEDURE_PARAMETERS
+        | cmd::LE_CS_SET_SECURITY_REQUIREMENTS => {
             if status_only(r, out)? {
                 return Ok(true);
             }
@@ -1130,6 +1138,22 @@ fn cs_override_parameters(r: &mut Reader<'_>, out: &mut Out, config: u16) -> Res
     Ok(())
 }
 
+/// CS_Security_Requirements of LE CS Set (Default) Security Requirements (7.8.157, 7.8.158).
+fn cs_security_requirements(r: &mut Reader<'_>, out: &mut Out) -> Result<u64> {
+    mask64(
+        "Security requirements",
+        r,
+        out,
+        &[
+            (0, "CS tone"),
+            (1, "150 ns RTT accuracy"),
+            (2, "10 ns RTT accuracy"),
+            (3, "RTT sounding sequence or random sequence"),
+            (4, "Normalized Attack Detector Metric"),
+        ],
+    )
+}
+
 fn cs_test(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     cs_mode("Main mode type", r, out, false)?;
     cs_mode("Sub mode type", r, out, true)?;
@@ -1925,6 +1949,30 @@ mod tests {
                 "CS enhancements: 0x01",
                 "  IPT enabled in the CS reflector",
             ]
+        );
+    }
+
+    #[test]
+    fn cs_security_requirements() {
+        let mut st = IndexState::default();
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_CS_SET_SECURITY_REQUIREMENTS, &[0x01, 0x00, 0x13, 0, 0, 0, 0, 0, 0, 0x80]),
+            [
+                "Handle: 1",
+                "Security requirements: 0x13 0x00 0x00 0x00 0x00 0x00 0x00 0x80",
+                "  CS tone",
+                "  150 ns RTT accuracy",
+                "  Normalized Attack Detector Metric",
+                "  Reserved (0x8000000000000000)",
+            ]
+        );
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_CS_SET_DEFAULT_SECURITY_REQUIREMENTS, &[0x04, 0, 0, 0, 0, 0, 0, 0]),
+            ["Security requirements: 0x04 0x00 0x00 0x00 0x00 0x00 0x00 0x00", "  10 ns RTT accuracy"]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_CS_SET_SECURITY_REQUIREMENTS, &[0x00, 0x01, 0x00]),
+            ["Status: Success (0x00)", "Handle: 1"]
         );
     }
 
