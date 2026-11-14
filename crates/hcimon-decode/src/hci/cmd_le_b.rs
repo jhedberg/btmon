@@ -1247,74 +1247,21 @@ fn read_min_supported_conn_interval_rsp(r: &mut Reader<'_>, out: &mut Out) -> Re
     Ok(())
 }
 
-/// LE event mask bit names (LE Set Event Mask, Core Specification Vol 4, Part E, Section 7.8.1).
-static LE_EVENT_MASK_BITS: &[(u8, &str)] = &[
-    (0, "LE Connection Complete"),
-    (1, "LE Advertising Report"),
-    (2, "LE Connection Update Complete"),
-    (3, "LE Read Remote Features Page 0 Complete"),
-    (4, "LE Long Term Key Request"),
-    (5, "LE Remote Connection Parameter Request"),
-    (6, "LE Data Length Change"),
-    (7, "LE Read Local P-256 Public Key Complete"),
-    (8, "LE Generate DHKey Complete"),
-    (9, "LE Enhanced Connection Complete"),
-    (10, "LE Directed Advertising Report"),
-    (11, "LE PHY Update Complete"),
-    (12, "LE Extended Advertising Report"),
-    (13, "LE Periodic Advertising Sync Established"),
-    (14, "LE Periodic Advertising Report"),
-    (15, "LE Periodic Advertising Sync Lost"),
-    (16, "LE Scan Timeout"),
-    (17, "LE Advertising Set Terminated"),
-    (18, "LE Scan Request Received"),
-    (19, "LE Channel Selection Algorithm"),
-    (20, "LE Connectionless IQ Report"),
-    (21, "LE Connection IQ Report"),
-    (22, "LE CTE Request Failed"),
-    (23, "LE Periodic Advertising Sync Transfer Received"),
-    (24, "LE CIS Established"),
-    (25, "LE CIS Request"),
-    (26, "LE Create BIG Complete"),
-    (27, "LE Terminate BIG Complete"),
-    (28, "LE BIG Sync Established"),
-    (29, "LE BIG Sync Lost"),
-    (30, "LE Request Peer SCA Complete"),
-    (31, "LE Path Loss Threshold"),
-    (32, "LE Transmit Power Reporting"),
-    (33, "LE BIGInfo Advertising Report"),
-    (34, "LE Subrate Change"),
-    (35, "LE Periodic Advertising Sync Established v2"),
-    (36, "LE Periodic Advertising Report v2"),
-    (37, "LE Periodic Advertising Sync Transfer Received v2"),
-    (38, "LE Periodic Advertising Subevent Data Request"),
-    (39, "LE Periodic Advertising Response Report"),
-    (40, "LE Enhanced Connection Complete v2"),
-    (41, "LE CIS Established v2"),
-    (42, "LE Read All Remote Features Complete"),
-    (43, "LE CS Read Remote Supported Capabilities Complete"),
-    (44, "LE CS Read Remote FAE Table Complete"),
-    (45, "LE CS Security Enable Complete"),
-    (46, "LE CS Config Complete"),
-    (47, "LE CS Procedure Enable Complete"),
-    (48, "LE CS Subevent Result"),
-    (49, "LE CS Subevent Result Continue"),
-    (50, "LE CS Test End Complete"),
-    (51, "LE Monitored Advertisers Report"),
-    (52, "LE Frame Space Update Complete"),
-    (53, "LE UTP Receive"),
-    (54, "LE Connection Rate Change"),
-    (55, "LE CS Read Remote Supported Capabilities Complete v2"),
-];
-
 /// LE Set Event Mask [v2]: the first eight octets carry the bits defined so far, the
 /// remaining octets (up to 255 in total) are reserved.
+/// LE event mask bits 64 and above of LE Set Event Mask v2 (7.8.1), numbered from 64.
+static LE_EVENT_MASK_BITS_64: &[(u8, &str)] = &[
+    (0, "LE Test Report HDT Link Quality"),
+    (1, "LE CIS Update"),
+    (2, "LE Update CIG Peripheral Request"),
+];
+
 fn le_event_mask_v2(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let b = r.array::<8>()?;
     let mask = u64::from_le_bytes(b);
     let hex: Vec<String> = b.iter().map(|x| format!("0x{x:02x}")).collect();
     field!(out, "Mask: {}", hex.join(" "));
-    out.nest(|o| bits(o, mask, LE_EVENT_MASK_BITS, 64));
+    out.nest(|o| bits(o, mask, super::cmd_le_a::LE_EVENT_MASK_BITS, 64));
     let rest = r.rest();
     if rest.is_empty() {
         return Ok(());
@@ -1327,9 +1274,14 @@ fn le_event_mask_v2(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     out.nest(|o| {
         for (i, byte) in rest.iter().enumerate() {
             for bit in 0..8 {
-                if byte & (1 << bit) != 0 {
-                    o.unknown(format!("Unknown bit {}", 64 + i * 8 + bit));
+                if byte & (1 << bit) == 0 {
+                    continue;
                 }
+                let n = 64 + i * 8 + bit;
+                match LE_EVENT_MASK_BITS_64.iter().find(|(b, _)| *b as usize + 64 == n) {
+                    Some((_, name)) => o.line(*name),
+                    None => o.unknown(format!("Unknown bit {n}")),
+                };
             }
         }
     });
@@ -1557,6 +1509,8 @@ mod tests {
         );
         let lines = cmd_lines(&mut st, cmd::LE_SET_HOST_FEATURE_V2, &[0x40, 0x00, 0x00]);
         assert_eq!(lines, ["Bit Number: 64", "  Monitoring Advertisers", "Bit Value: Disabled (0x00)"]);
+        let lines = cmd_lines(&mut st, cmd::LE_SET_HOST_FEATURE_V2, &[0x5a, 0x00, 0x01]);
+        assert_eq!(lines, ["Bit Number: 90", "  Opportunistic Encryption (Host Support)", "Bit Value: Enabled (0x01)"]);
         let lines = cmd_lines(&mut st, cmd::LE_SET_HOST_FEATURE_V2, &[0x00, 0x01, 0x01]);
         assert_eq!(
             lines,
@@ -2191,6 +2145,23 @@ mod tests {
         let lines = cmd_lines(&mut st, cmd::LE_SET_EVENT_MASK_V2, &data);
         assert_eq!(lines[7], "Mask (bits 64 and above): 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00");
         assert_eq!(lines[8], "  Unknown bit 73");
+        data[6] = 0x00;
+        data[7] = 0x07;
+        data[8] = 0x07;
+        data[9] = 0x00;
+        let lines = cmd_lines(&mut st, cmd::LE_SET_EVENT_MASK_V2, &data);
+        assert_eq!(
+            &lines[6..],
+            [
+                "  LE Data Length Change v2",
+                "  LE CIS Established v3",
+                "  LE Create BIG Complete v2",
+                "Mask (bits 64 and above): 07 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+                "  LE Test Report HDT Link Quality",
+                "  LE CIS Update",
+                "  LE Update CIG Peripheral Request",
+            ]
+        );
     }
 
     #[test]

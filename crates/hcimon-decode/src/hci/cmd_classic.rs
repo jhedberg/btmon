@@ -1469,6 +1469,9 @@ pub static EVENT_MASK_PAGE2_BITS: &[(u8, &str)] = &[
     (23, "Authenticated Payload Timeout Expired"),
     (24, "SAM Status Change"),
     (25, "Encryption Change v2"),
+    (26, "Encryption Change v3"),
+    (27, "Encryption Key Refresh Complete v2"),
+    (28, "Encryption Key Debug Report"),
 ];
 
 fn event_mask(r: &mut Reader<'_>, out: &mut Out, table: &[(u8, &str)]) -> Result<u64> {
@@ -2083,6 +2086,36 @@ pub static SUPPORTED_COMMANDS: &[(u8, u8, &str)] = &[
     (49, 3, "LE CS Write Cached Remote Supported Capabilities v2"),
     (49, 4, "LE CS Set Security Requirements"),
     (49, 5, "LE CS Set Default Security Requirements"),
+    (49, 6, "LE Test End v2"),
+    (49, 7, "Host Buffer Size v2"),
+    (50, 0, "LE Setup ISO Data Path v2"),
+    (50, 1, "LE Transmitter Test v5"),
+    (50, 2, "LE Receiver Test v4"),
+    (50, 3, "Refresh Encryption Key v2"),
+    (50, 4, "LE Enable Encryption v2"),
+    (50, 5, "LE Read Maximum Data Length v2"),
+    (50, 6, "LE Read Suggested Default Data Length v2"),
+    (50, 7, "LE Write Suggested Default Data Length v2"),
+    (51, 0, "LE Set CIG Parameters v2"),
+    (51, 1, "LE Set CIG Parameters Test v2"),
+    (51, 2, "LE Create CIS v2"),
+    (51, 3, "LE Create BIG v2"),
+    (51, 4, "LE Create BIG Test v2"),
+    (51, 5, "LE Read Encryption Key Schedule Debug Mode"),
+    (51, 6, "LE Write Encryption Key Schedule Debug Mode"),
+    (51, 7, "Read Encryption Key Debug Reporting Mode"),
+    (52, 0, "Write Encryption Key Debug Reporting Mode"),
+    (52, 1, "LE Set HDT Default Parameters"),
+    (52, 2, "LE Set HDT Parameters Test"),
+    (52, 3, "LE Set Data Length v2"),
+    (52, 4, "LE Read CIS Update Capabilities"),
+    (52, 5, "LE Set Default CIS Update Parameters"),
+    (52, 6, "LE Add CIG Configuration"),
+    (52, 7, "LE Add CIG Configuration Test"),
+    (53, 0, "LE Update CIG"),
+    (53, 1, "LE Update CIG Test"),
+    (53, 2, "LE Update CIG Peripheral Request Reply"),
+    (53, 3, "LE Remove CIG Configuration"),
 ];
 
 /// Name of the command at the given octet/bit of Supported_Commands.
@@ -2261,6 +2294,16 @@ mod tests {
     fn set_event_mask_page2() {
         let lines = cmd_lines(cmd::SET_EVENT_MASK_PAGE_2, &[0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
         assert_eq!(lines, ["Mask: 0x00 0x80 0x00 0x00 0x00 0x00 0x00 0x00", "  Synchronization Train Complete"]);
+        let lines = cmd_lines(cmd::SET_EVENT_MASK_PAGE_2, &[0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(
+            lines,
+            [
+                "Mask: 0x00 0x00 0x00 0x1c 0x00 0x00 0x00 0x00",
+                "  Encryption Change v3",
+                "  Encryption Key Refresh Complete v2",
+                "  Encryption Key Debug Report",
+            ]
+        );
     }
 
     #[test]
@@ -2392,6 +2435,25 @@ mod tests {
         let mut r = Reader::new(&[0x01]);
         assert!(!command_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
         assert!(!return_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
+    }
+
+    #[test]
+    fn core_7_0_supported_commands() {
+        let mut data = vec![0x00; 65];
+        data[1 + 49] = 0xc0;
+        data[1 + 52] = 0x08;
+        data[1 + 53] = 0x08;
+        let lines = rsp_lines(cmd::READ_LOCAL_SUPPORTED_COMMANDS, &data);
+        assert_eq!(
+            &lines[1..],
+            [
+                "Commands: 4 entries",
+                "  LE Test End v2 (Octet 49 - Bit 6)",
+                "  Host Buffer Size v2 (Octet 49 - Bit 7)",
+                "  LE Set Data Length v2 (Octet 52 - Bit 3)",
+                "  LE Remove CIG Configuration (Octet 53 - Bit 3)",
+            ]
+        );
     }
 
     #[test]

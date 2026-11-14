@@ -448,8 +448,8 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
 // ---------------------------------------------------------------------------
 // Tables
 
-/// LE event mask bit names (LE Set Event Mask, Core Specification v6.3 Section 7.8.1).
-static LE_EVENT_MASK_BITS: &[(u8, &str)] = &[
+/// LE event mask bit names (LE Set Event Mask, Core Specification Vol 4, Part E, Section 7.8.1).
+pub(super) static LE_EVENT_MASK_BITS: &[(u8, &str)] = &[
     (0, "LE Connection Complete"),
     (1, "LE Advertising Report"),
     (2, "LE Connection Update Complete"),
@@ -506,6 +506,9 @@ static LE_EVENT_MASK_BITS: &[(u8, &str)] = &[
     (53, "LE UTP Receive"),
     (54, "LE Connection Rate Change"),
     (55, "LE CS Read Remote Supported Capabilities Complete v2"),
+    (56, "LE Data Length Change v2"),
+    (57, "LE CIS Established v3"),
+    (58, "LE Create BIG Complete v2"),
 ];
 
 const ST_NONCONN: &str = "Non-connectable Advertising State";
