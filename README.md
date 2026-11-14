@@ -72,12 +72,14 @@ $ hcimon --tty /dev/serial/by-id/usb-SEGGER_J-Link_000682451005-if00 -p
   and says so: a warning on stderr, in the summary and in MCP results, with
   the packet count and byte offset where reading stopped.
 * **Decoders** for HCI commands, events and LE subevents through Core
-  Specification 6.3 (including Channel Sounding, PAwR, ISO, decision-based
-  advertising filtering, monitored advertisers, UTP), ACL/SCO/ISO data, L2CAP
-  (signaling, dynamic channels, ERTM/streaming framing, credit-based
-  channels), ATT/GATT (with request/response matching and learned attribute
-  types), SMP, SDP, RFCOMM, advertising/EIR data, and BlueZ management
-  records.  The output format follows btmon so it reads the same.
+  Specification 7.0 (including High Data Throughput, the Encryption Key
+  Schedule, CIS parameter updates, Channel Sounding, PAwR, ISO,
+  decision-based advertising filtering, monitored advertisers, UTP),
+  ACL/SCO/ISO data, L2CAP (signaling, dynamic channels, ERTM/streaming
+  framing, credit-based channels), ATT/GATT (with request/response matching
+  and learned attribute types), SMP, SDP, RFCOMM, advertising/EIR data, and
+  BlueZ management records.  The output format follows btmon so it reads
+  the same.
 
 ## Building
 

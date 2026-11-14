@@ -1,7 +1,7 @@
 //! BR/EDR command decoders: Link Control (OGF 1), Link Policy (OGF 2), Controller & Baseband (OGF 3), Informational (OGF 4), Status (OGF 5) and Testing (OGF 6).
 //!
-//! Parameter layouts follow Core Specification v6.3, Vol 4, Part E, Sections
-//! 7.1 to 7.6; the labels follow btmon so that output reads the same.
+//! Parameter layouts follow Core Specification Vol 4, Part E, Sections 7.1 to
+//! 7.6; the labels follow btmon so that output reads the same.
 
 use super::cmd;
 use super::common::*;

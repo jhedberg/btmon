@@ -516,7 +516,7 @@ const ST_CC: &str = "Central Role & Central Role";
 const ST_PP: &str = "Peripheral Role & Peripheral Role";
 const ST_CP: &str = "Central Role & Peripheral Role";
 
-/// State combinations of the LE_States bit field (Core Specification v6.3
+/// State combinations of the LE_States bit field (Core Specification Vol 4, Part E,
 /// Section 7.8.27 and Vol 6, Part B, Section 1.1.1), one entry per bit.
 static LE_STATES: &[&[&str]] = &[
     &[ST_NONCONN],                    // 0
