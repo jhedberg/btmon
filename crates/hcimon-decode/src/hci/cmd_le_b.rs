@@ -172,6 +172,31 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
         cmd::LE_WRITE_ENCRYPTION_KEY_SCHEDULE_DEBUG_MODE => {
             eks_debug_mode(r, out)?;
         }
+        cmd::LE_SET_DATA_LENGTH_V2 => {
+            handle(st, r, out)?;
+            super::cmd_le_a::data_length(r, out)?;
+            data_length_phys(r, out)?;
+        }
+        cmd::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_V2 => {
+            data_length_phys(r, out)?;
+        }
+        cmd::LE_WRITE_SUGGESTED_DEFAULT_DATA_LENGTH_V2 => {
+            super::cmd_le_a::data_length(r, out)?;
+            data_length_phys(r, out)?;
+        }
+        cmd::LE_SET_HDT_DEFAULT_PARAMETERS => {
+            hdt_mic_length(r, out)?;
+            packet_format(r, out)?;
+            hdt_rates("ACL Rates", r, out)?;
+        }
+        cmd::LE_READ_MAXIMUM_DATA_LENGTH_V2 => {
+            let v = r.u8()?;
+            if v == 0x00 {
+                field!(out, "PHY: No PHY (0x00)");
+            } else {
+                phy_value("PHY", out, v);
+            }
+        }
         _ => return Ok(false),
     }
     Ok(true)
@@ -229,7 +254,8 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
         | cmd::LE_CS_SET_DEFAULT_SETTINGS
         | cmd::LE_CS_WRITE_CACHED_REMOTE_FAE_TABLE
         | cmd::LE_CS_SET_PROCEDURE_PARAMETERS
-        | cmd::LE_CS_SET_SECURITY_REQUIREMENTS => {
+        | cmd::LE_CS_SET_SECURITY_REQUIREMENTS
+        | cmd::LE_SET_DATA_LENGTH_V2 => {
             if status_only(r, out)? {
                 return Ok(true);
             }
@@ -302,6 +328,21 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
             u8_field("List size", r, out)?;
         }
         cmd::LE_READ_MINIMUM_SUPPORTED_CONNECTION_INTERVAL => read_min_supported_conn_interval_rsp(r, out)?,
+        cmd::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_V2 => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            super::cmd_le_a::data_length(r, out)?;
+        }
+        cmd::LE_READ_MAXIMUM_DATA_LENGTH_V2 => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            super::cmd_le_a::max_data_length(r, out)?;
+            u8_field("Max TX Payload Window size", r, out)?;
+            u8_field("Max RX Payload Window size", r, out)?;
+            u16_field("Max RX Payload Packet size", r, out)?;
+        }
         cmd::LE_READ_ENCRYPTION_KEY_SCHEDULE_DEBUG_MODE => {
             if status_only(r, out)? {
                 return Ok(true);
@@ -1922,6 +1963,64 @@ mod tests {
                 "Ch3c jump: 2",
                 "CS enhancements: 0x01",
                 "  IPT enabled in the CS reflector",
+            ]
+        );
+    }
+
+    #[test]
+    fn set_hdt_default_parameters() {
+        let mut st = IndexState::default();
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_SET_HDT_DEFAULT_PARAMETERS, &[0x02, 0x01, 0x19, 0x00]),
+            [
+                "MIC Length: 128 bits (0x02)",
+                "Packet Format: Packet Format 0 (0x01)",
+                "ACL Rates: 0x0019",
+                "  HDT 2M",
+                "  HDT 6M",
+                "  HDT 7.5M",
+            ]
+        );
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_SET_HDT_DEFAULT_PARAMETERS, &[0x00, 0x03, 0x20, 0x00])[..3],
+            ["MIC Length: Reserved (0x00)", "Packet Format: Reserved (0x03)", "ACL Rates: 0x0020"]
+        );
+    }
+
+    #[test]
+    fn data_length_v2() {
+        let mut st = IndexState::default();
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_SET_DATA_LENGTH_V2, &[0x40, 0x00, 0xef, 0x1f, 0x90, 0x42, 0x01]),
+            ["Handle: 64", "TX octets: 8175", "TX time: 17040", "PHYs: HDT (0x01)"]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_SET_DATA_LENGTH_V2, &[0x00, 0x40, 0x00]),
+            ["Status: Success (0x00)", "Handle: 64"]
+        );
+        assert_eq!(cmd_lines(&mut st, cmd::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_V2, &[0x00]), ["PHYs: All GFSK (0x00)"]);
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_V2, &[0x00, 0x00, 0x01, 0x9a, 0x04]),
+            ["Status: Success (0x00)", "TX octets: 256", "TX time: 1178"]
+        );
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_WRITE_SUGGESTED_DEFAULT_DATA_LENGTH_V2, &[0xfb, 0x00, 0x48, 0x08, 0x02]),
+            ["TX octets: 251", "TX time: 2120", "PHYs: Reserved (0x02)"]
+        );
+        assert_eq!(cmd_lines(&mut st, cmd::LE_READ_MAXIMUM_DATA_LENGTH_V2, &[0x00]), ["PHY: No PHY (0x00)"]);
+        assert_eq!(cmd_lines(&mut st, cmd::LE_READ_MAXIMUM_DATA_LENGTH_V2, &[0x05]), ["PHY: LE HDT (0x05)"]);
+        let data = [0x00, 0xef, 0x1f, 0x90, 0x42, 0xef, 0x1f, 0x90, 0x42, 0x04, 0x02, 0x00, 0x02];
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_READ_MAXIMUM_DATA_LENGTH_V2, &data),
+            [
+                "Status: Success (0x00)",
+                "Max TX octets: 8175",
+                "Max TX time: 17040",
+                "Max RX octets: 8175",
+                "Max RX time: 17040",
+                "Max TX Payload Window size: 4",
+                "Max RX Payload Window size: 2",
+                "Max RX Payload Packet size: 512",
             ]
         );
     }

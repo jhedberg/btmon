@@ -530,27 +530,60 @@ pub fn phy_str(phy: u8) -> &'static str {
         0x02 => "LE 2M",
         0x03 => "LE Coded",
         0x04 => "LE Coded with S=2",
+        0x05 => "LE HDT",
         _ => "Reserved",
     }
 }
 
 pub fn phy(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     let v = r.u8()?;
+    phy_value(label, out, v);
+    Ok(v)
+}
+
+pub fn phy_value(label: &str, out: &mut Out, v: u8) {
     match phy_str(v) {
         "Reserved" => out.unknown(format!("{label}: Reserved (0x{v:02x})")),
         s => field!(out, "{}: {} (0x{:02x})", label, s, v),
     };
-    Ok(v)
 }
 
-/// Expand a PHY bit mask (`LE 1M`, `LE 2M`, `LE Coded`).
+/// Expand a PHY bit mask (`LE 1M`, `LE 2M`, `LE Coded`, `LE HDT`).
 pub fn phy_mask(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     let v = r.u8()?;
     field!(out, "{}: 0x{:02x}", label, v);
     out.nest(|o| {
-        bits(o, v as u64, &[(0, "LE 1M"), (1, "LE 2M"), (2, "LE Coded")], 3);
+        bits(o, v as u64, &[(0, "LE 1M"), (1, "LE 2M"), (2, "LE Coded"), (4, "LE HDT")], 3);
     });
     Ok(v)
+}
+
+/// HDT rates (bits 0 to 4: HDT2, HDT3, HDT4, HDT6 and HDT7.5) of the LE HDT PHY, as the HDT
+/// commands and events of Core 7.0 carry them.
+pub fn hdt_rates(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u16> {
+    mask16(
+        label,
+        r,
+        out,
+        &[(0, "HDT 2M"), (1, "HDT 3M"), (2, "HDT 4M"), (3, "HDT 6M"), (4, "HDT 7.5M")],
+        16,
+    )
+}
+
+/// The preferred HDT packet format of the HDT commands of Core 7.0.
+pub fn packet_format(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    enum8(
+        "Packet Format",
+        r,
+        out,
+        &[(0x00, "No preferred format"), (0x01, "Packet Format 0"), (0x02, "Packet Format 1")],
+    )
+}
+
+/// PHYS of the data length commands and events of Core 7.0: whether the lengths are those of the
+/// GFSK PHYs or of the LE HDT PHY.
+pub fn data_length_phys(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    enum8("PHYs", r, out, &[(0x00, "All GFSK"), (0x01, "HDT")])
 }
 
 /// Append one child line per set bit in `mask`; bits at or above `known` without a name are flagged.
@@ -1173,7 +1206,8 @@ pub fn adv_data(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
 
 /// PHY including both LE Coded variants (power control, test and PHY update reports).
 pub fn phy_coded(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
-    enum8(label, r, out, &[(0x01, "LE 1M"), (0x02, "LE 2M"), (0x03, "LE Coded with S=8"), (0x04, "LE Coded with S=2")])
+    let phys = [(0x01, "LE 1M"), (0x02, "LE 2M"), (0x03, "LE Coded with S=8"), (0x04, "LE Coded with S=2"), (0x05, "LE HDT")];
+    enum8(label, r, out, &phys)
 }
 
 /// ISO stream encryption: `Encryption: Unencrypted (0x00)`.

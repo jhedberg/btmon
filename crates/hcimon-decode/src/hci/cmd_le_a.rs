@@ -355,10 +355,7 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
             if status_only(r, out)? {
                 return Ok(true);
             }
-            u16_field("Max TX octets", r, out)?;
-            u16_field("Max TX time", r, out)?;
-            u16_field("Max RX octets", r, out)?;
-            u16_field("Max RX time", r, out)?;
+            max_data_length(r, out)?;
         }
         cmd::LE_READ_PHY => {
             if status_only(r, out)? {
@@ -741,7 +738,16 @@ fn service_data(r: &mut Reader<'_>, out: &mut Out) -> Result<u16> {
 }
 
 /// TX octets / TX time pair used by the data length commands.
-fn data_length(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// The return parameters of LE Read Maximum Data Length after the status, which v2 extends.
+pub(super) fn max_data_length(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    u16_field("Max TX octets", r, out)?;
+    u16_field("Max TX time", r, out)?;
+    u16_field("Max RX octets", r, out)?;
+    u16_field("Max RX time", r, out)?;
+    Ok(())
+}
+
+pub(super) fn data_length(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     u16_field("TX octets", r, out)?;
     u16_field("TX time", r, out)?;
     Ok(())
@@ -764,18 +770,38 @@ fn phy_preference(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     Ok(())
 }
 
+/// PHY_Options of LE Set PHY: the preferred coding on LE Coded (bits 0 and 1), the HDT rates (bits 2
+/// to 6), a 64-bit MIC (bit 7) and the packet format (bits 8 and 9) on LE HDT, and a forced key
+/// refresh (bit 10).
 fn phy_options(r: &mut Reader<'_>, out: &mut Out) -> Result<u16> {
     let v = r.u16()?;
-    let name = match v {
-        0x0000 => "No preferred coding",
-        0x0001 => "S=2 coding",
-        0x0002 => "S=8 coding",
-        _ => "Reserved",
-    };
-    match name {
-        "Reserved" => out.unknown(format!("PHY options preference: Reserved (0x{v:04x})")),
-        _ => field!(out, "PHY options preference: {} (0x{:04x})", name, v),
-    };
+    field!(out, "PHY Options: 0x{:04x}", v);
+    out.nest(|o| {
+        let coding = v & 0x0003;
+        match coding {
+            0 => field!(o, "LE Coded: No preferred coding (0x00)"),
+            1 => field!(o, "LE Coded: Prefer S=2 coding (0x01)"),
+            2 => field!(o, "LE Coded: Prefer S=8 coding (0x02)"),
+            _ => o.unknown(format!("LE Coded: Reserved (0x{coding:02x})")),
+        };
+        let format = (v >> 8) & 0x0003;
+        match format {
+            0 => field!(o, "LE HDT: No preferred packet format (0x00)"),
+            1 => field!(o, "LE HDT: Prefer packet format 0 (0x01)"),
+            2 => field!(o, "LE HDT: Prefer packet format 1 (0x02)"),
+            _ => o.unknown(format!("LE HDT: Reserved (0x{format:02x})")),
+        };
+        let flags = [
+            (2, "HDT 2M"),
+            (3, "HDT 3M"),
+            (4, "HDT 4M"),
+            (5, "HDT 6M"),
+            (6, "HDT 7.5M"),
+            (7, "Prefer 64-bit MIC"),
+            (10, "Force key refresh"),
+        ];
+        bits(o, (v & !0x0303) as u64, &flags, 16);
+    });
     Ok(v)
 }
 
@@ -1339,7 +1365,28 @@ mod tests {
                 "  LE Coded",
                 "RX PHYs preference: 0x04",
                 "  LE Coded",
-                "PHY options preference: S=8 coding (0x0002)",
+                "PHY Options: 0x0002",
+                "  LE Coded: Prefer S=8 coding (0x02)",
+                "  LE HDT: No preferred packet format (0x00)",
+            ]
+        );
+        assert_eq!(
+            cmd_lines(cmd::LE_SET_PHY, &[0x00, 0x00, 0x00, 0x10, 0x18, 0xa4, 0x0a]),
+            [
+                "Handle: 0",
+                "All PHYs preference: 0x00",
+                "TX PHYs preference: 0x10",
+                "  LE HDT",
+                "RX PHYs preference: 0x18",
+                "  Unknown bit 3",
+                "  LE HDT",
+                "PHY Options: 0x0aa4",
+                "  LE Coded: No preferred coding (0x00)",
+                "  LE HDT: Prefer packet format 1 (0x02)",
+                "  HDT 2M",
+                "  HDT 6M",
+                "  Prefer 64-bit MIC",
+                "  Reserved (0x800)",
             ]
         );
     }

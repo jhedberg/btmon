@@ -22,7 +22,8 @@ pub fn le_event_params(st: &mut IndexState, sub: u8, r: &mut Reader<'_>, out: &m
         le_evt::READ_REMOTE_FEATURES_PAGE_0_COMPLETE => read_remote_features_page0_complete(st, r, out)?,
         le_evt::LONG_TERM_KEY_REQUEST => long_term_key_request(st, r, out)?,
         le_evt::REMOTE_CONNECTION_PARAMETER_REQUEST => remote_connection_parameter_request(st, r, out)?,
-        le_evt::DATA_LENGTH_CHANGE => data_length_change(st, r, out)?,
+        le_evt::DATA_LENGTH_CHANGE => data_length_change(st, r, out, false)?,
+        le_evt::DATA_LENGTH_CHANGE_V2 => data_length_change(st, r, out, true)?,
         le_evt::READ_LOCAL_P_256_PUBLIC_KEY_COMPLETE => read_local_p256_public_key_complete(r, out)?,
         le_evt::GENERATE_DHKEY_COMPLETE => generate_dhkey_complete(r, out)?,
         le_evt::ENHANCED_CONNECTION_COMPLETE => connection_complete(st, r, out, ConnComplete::EnhancedV1)?,
@@ -313,12 +314,17 @@ fn remote_connection_parameter_request(st: &IndexState, r: &mut Reader<'_>, out:
 }
 
 /// LE Data Length Change (7.7.65.7).
-fn data_length_change(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// LE Data Length Change v1 (0x07) and v2 (0x39, adds whether the lengths are those of the LE HDT
+/// PHY).
+fn data_length_change(st: &IndexState, r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     handle(st, r, out)?;
     u16_field("Max TX octets", r, out)?;
     u16_field("Max TX time", r, out)?;
     u16_field("Max RX octets", r, out)?;
     u16_field("Max RX time", r, out)?;
+    if v2 {
+        data_length_phys(r, out)?;
+    }
     Ok(())
 }
 
@@ -1438,12 +1444,27 @@ mod tests {
             texts(&nodes),
             ["Handle: 64", "Max TX octets: 251", "Max TX time: 2120", "Max RX octets: 251", "Max RX time: 2120"]
         );
+        let data = [0x40, 0x00, 0xef, 0x1f, 0x90, 0x42, 0x00, 0x01, 0x9a, 0x04, 0x01];
+        let (_, nodes) = run(le_evt::DATA_LENGTH_CHANGE_V2, &data);
+        assert_eq!(
+            texts(&nodes),
+            [
+                "Handle: 64",
+                "Max TX octets: 8175",
+                "Max TX time: 17040",
+                "Max RX octets: 256",
+                "Max RX time: 1178",
+                "PHYs: HDT (0x01)",
+            ]
+        );
     }
 
     #[test]
     fn phy_update_complete_params() {
         let (_, nodes) = run(le_evt::PHY_UPDATE_COMPLETE, &[0x00, 0x40, 0x00, 0x02, 0x02]);
         assert_eq!(texts(&nodes), ["Status: Success (0x00)", "Handle: 64", "TX PHY: LE 2M (0x02)", "RX PHY: LE 2M (0x02)"]);
+        let (_, nodes) = run(le_evt::PHY_UPDATE_COMPLETE, &[0x00, 0x40, 0x00, 0x05, 0x05]);
+        assert_eq!(&texts(&nodes)[2..], ["TX PHY: LE HDT (0x05)", "RX PHY: LE HDT (0x05)"]);
     }
 
     #[test]
@@ -1519,6 +1540,8 @@ mod tests {
         assert_eq!(lines[5], "TX power level flag: 0x02");
         assert_eq!(child_texts(&nodes[5]), ["Transmit power level is at maximum level"]);
         assert_eq!(lines[6], "Delta: Not available (0x7f)");
+        let (_, nodes) = run(le_evt::TRANSMIT_POWER_REPORTING, &[0x00, 0x40, 0x00, 0x00, 0x05, 0x04, 0x00, 0x00]);
+        assert_eq!(texts(&nodes)[3], "PHY: LE HDT (0x05)");
     }
 
     #[test]
