@@ -85,6 +85,9 @@ pub static ERRORS: &[(u8, &str)] = &[
     (0x46, "Too Late"),
     (0x47, "Too Early"),
     (0x48, "Insufficient Channels"),
+    (0x49, "Invalid Packet Format"),
+    (0x4a, "Invalid Public Key"),
+    (0x4b, "Debug Key Not Allowed"),
 ];
 
 pub fn error_str(code: u8) -> &'static str {
@@ -506,6 +509,7 @@ pub fn version_str(v: u8) -> &'static str {
         15 => "Bluetooth 6.1",
         16 => "Bluetooth 6.2",
         17 => "Bluetooth 6.3",
+        18 => "Bluetooth 7.0",
         _ => "Reserved",
     }
 }

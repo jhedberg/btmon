@@ -2393,4 +2393,18 @@ mod tests {
         assert!(!command_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
         assert!(!return_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
     }
+
+    #[test]
+    fn core_7_0_version_and_error_codes() {
+        let lines = rsp_lines(
+            cmd::READ_LOCAL_VERSION_INFORMATION,
+            &[0x00, 0x12, 0x34, 0x12, 0x12, 0x3f, 0x00, 0x78, 0x56],
+        );
+        assert_eq!(lines[1], "HCI version: Bluetooth 7.0 (0x12) - Revision 4660 (0x1234)");
+        assert_eq!(lines[2], "LMP version: Bluetooth 7.0 (0x12) - Subversion 22136 (0x5678)");
+        for (code, text) in [(0x49, "Invalid Packet Format"), (0x4a, "Invalid Public Key"), (0x4b, "Debug Key Not Allowed")] {
+            let lines = rsp_lines(cmd::READ_BD_ADDR, &[code, 1, 2, 3, 4, 5, 6]);
+            assert_eq!(lines[0], format!("Status: {text} (0x{code:02x})"));
+        }
+    }
 }
