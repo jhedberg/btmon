@@ -162,3 +162,8 @@ fn le_set_scan_enable_params() {
 prints a whole capture in btmon's text format and is the quickest way to eyeball
 a decoder against real traffic.  Any capture in btsnoop/monitor format
 (`btmon -w file.snoop`) works too.
+
+`testdata/btvirt_core70.snoop` holds Core 7.0 traffic of two BlueZ emulator
+controllers (HDT PHY, data length v2, LE Enable Encryption v2, CIS and BIG v2);
+`tools/btvirt_core70.py <btvirt> <out>` records it again with a `btvirt` from
+BlueZ master.  The decoders are fuzzed over it and over the xg24 capture.
