@@ -20,8 +20,10 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
         | cmd::LE_CS_READ_REMOTE_FAE_TABLE => {
             handle(st, r, out)?;
         }
-        cmd::LE_SET_CIG_PARAMETERS => set_cig_parameters(r, out)?,
-        cmd::LE_SET_CIG_PARAMETERS_TEST => set_cig_parameters_test(r, out)?,
+        cmd::LE_SET_CIG_PARAMETERS => set_cig_parameters(r, out, false)?,
+        cmd::LE_SET_CIG_PARAMETERS_V2 => set_cig_parameters(r, out, true)?,
+        cmd::LE_SET_CIG_PARAMETERS_TEST => set_cig_parameters_test(r, out, false)?,
+        cmd::LE_SET_CIG_PARAMETERS_TEST_V2 => set_cig_parameters_test(r, out, true)?,
         cmd::LE_CREATE_CIS => create_cis(st, r, out)?,
         cmd::LE_REMOVE_CIG => {
             cig_id(r, out)?;
@@ -33,8 +35,10 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
             handle_labelled("CIS Handle", st, r, out)?;
             reason(r, out)?;
         }
-        cmd::LE_CREATE_BIG => create_big(r, out)?,
-        cmd::LE_CREATE_BIG_TEST => create_big_test(r, out)?,
+        cmd::LE_CREATE_BIG => create_big(r, out, false)?,
+        cmd::LE_CREATE_BIG_V2 => create_big(r, out, true)?,
+        cmd::LE_CREATE_BIG_TEST => create_big_test(r, out, false)?,
+        cmd::LE_CREATE_BIG_TEST_V2 => create_big_test(r, out, true)?,
         cmd::LE_TERMINATE_BIG => {
             big_handle(r, out)?;
             reason(r, out)?;
@@ -224,7 +228,10 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
             field!(out, "TX timestamp: {} us (0x{:08x})", ts, ts);
             usec24("Time offset", r, out)?;
         }
-        cmd::LE_SET_CIG_PARAMETERS | cmd::LE_SET_CIG_PARAMETERS_TEST => {
+        cmd::LE_SET_CIG_PARAMETERS
+        | cmd::LE_SET_CIG_PARAMETERS_V2
+        | cmd::LE_SET_CIG_PARAMETERS_TEST
+        | cmd::LE_SET_CIG_PARAMETERS_TEST_V2 => {
             if status_only(r, out)? {
                 return Ok(true);
             }
@@ -457,7 +464,26 @@ fn rate_params(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
 // Isochronous channels
 // ---------------------------------------------------------------------------
 
-fn set_cig_parameters(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// The LE HDT PHY parameters that v2 of LE Set CIG Parameters (Test) and LE Create BIG (Test) add,
+/// per CIS (`dirs`) or for the BIG.
+fn hdt_iso_params(r: &mut Reader<'_>, out: &mut Out, dirs: bool) -> Result<()> {
+    if dirs {
+        coded_rates("Central to Peripheral Coded Rates", r, out)?;
+        coded_rates("Peripheral to Central Coded Rates", r, out)?;
+        hdt_rates("Central to Peripheral HDT Rates", r, out)?;
+        hdt_rates("Peripheral to Central HDT Rates", r, out)?;
+    } else {
+        coded_rates("Coded Rates", r, out)?;
+        hdt_rates("HDT Rates", r, out)?;
+    }
+    hdt_mic_length(r, out)?;
+    packet_format(r, out)?;
+    Ok(())
+}
+
+/// LE Set CIG Parameters v1 and v2; v2 adds the coded and HDT rates, MIC length and packet format
+/// of each CIS.
+fn set_cig_parameters(r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     cig_id(r, out)?;
     usec24("Central to Peripheral SDU Interval", r, out)?;
     usec24("Peripheral to Central SDU Interval", r, out)?;
@@ -476,13 +502,18 @@ fn set_cig_parameters(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
             phy_mask("Peripheral to Central PHY", r, o)?;
             u8_hex("Central to Peripheral Retransmission attempts", r, o)?;
             u8_hex("Peripheral to Central Retransmission attempts", r, o)?;
+            if v2 {
+                hdt_iso_params(r, o, true)?;
+            }
             Ok(())
         })?;
     }
     Ok(())
 }
 
-fn set_cig_parameters_test(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// LE Set CIG Parameters Test v1 and v2; v2 adds the anchor update buffer time and, per CIS, the
+/// LE HDT PHY parameters and payload window sizes.
+fn set_cig_parameters_test(r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     cig_id(r, out)?;
     usec24("Central to Peripheral SDU Interval", r, out)?;
     usec24("Peripheral to Central SDU Interval", r, out)?;
@@ -490,6 +521,10 @@ fn set_cig_parameters_test(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     u8_hex("Peripheral to Central Flush Timeout", r, out)?;
     iso_interval(r, out)?;
     sca(r, out)?;
+    if v2 {
+        let t = r.u16()?;
+        field!(out, "Anchor Update Buffer Time: {} us", t);
+    }
     packing(r, out)?;
     framing(r, out)?;
     let n = u8_field("Number of CIS", r, out)?;
@@ -505,6 +540,11 @@ fn set_cig_parameters_test(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
             phy_mask("Peripheral to Central PHY", r, o)?;
             u8_field("Central to Peripheral Burst Number", r, o)?;
             u8_field("Peripheral to Central Burst Number", r, o)?;
+            if v2 {
+                hdt_iso_params(r, o, true)?;
+                u8_field("Central to Peripheral Payload Window size", r, o)?;
+                u8_field("Peripheral to Central Payload Window size", r, o)?;
+            }
             Ok(())
         })?;
     }
@@ -520,7 +560,8 @@ fn create_cis(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> 
     Ok(())
 }
 
-fn create_big(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// LE Create BIG v1 and v2; v2 adds the coded and HDT rates, MIC length and packet format.
+fn create_big(r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     big_handle(r, out)?;
     u8_hex("Advertising Handle", r, out)?;
     u8_field("Number of BIS", r, out)?;
@@ -533,10 +574,14 @@ fn create_big(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     framing(r, out)?;
     encryption(r, out)?;
     broadcast_code(r, out)?;
+    if v2 {
+        hdt_iso_params(r, out, false)?;
+    }
     Ok(())
 }
 
-fn create_big_test(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// LE Create BIG Test v1 and v2; v2 adds the LE HDT PHY parameters and blocks per payload.
+fn create_big_test(r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     big_handle(r, out)?;
     u8_hex("Advertising Handle", r, out)?;
     u8_field("Number of BIS", r, out)?;
@@ -553,6 +598,10 @@ fn create_big_test(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     u8_hex("Pre Transmission Offset", r, out)?;
     encryption(r, out)?;
     broadcast_code(r, out)?;
+    if v2 {
+        hdt_iso_params(r, out, false)?;
+        u8_field("Blocks per Payload", r, out)?;
+    }
     Ok(())
 }
 
@@ -1501,6 +1550,72 @@ mod tests {
     }
 
     #[test]
+    fn set_cig_parameters_v2_params() {
+        let mut st = IndexState::default();
+        let mut data = vec![0x00, 0x10, 0x27, 0x00, 0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x0a, 0x00, 0x01];
+        // CIS ID, max SDUs, PHYs (LE HDT), RTNs
+        data.extend_from_slice(&[0x00, 0x28, 0x00, 0x00, 0x00, 0x10, 0x10, 0x02, 0x02]);
+        // coded rates, HDT rates, MIC length, packet format
+        data.extend_from_slice(&[0x03, 0x02, 0x1f, 0x00, 0x01, 0x00, 0x02, 0x00]);
+        let lines = cmd_lines(&mut st, cmd::LE_SET_CIG_PARAMETERS_V2, &data);
+        assert_eq!(
+            lines[11..],
+            [
+                "  Peripheral to Central Maximum SDU Size: 0",
+                "  Central to Peripheral PHY: 0x10",
+                "    LE HDT",
+                "  Peripheral to Central PHY: 0x10",
+                "    LE HDT",
+                "  Central to Peripheral Retransmission attempts: 0x02",
+                "  Peripheral to Central Retransmission attempts: 0x02",
+                "  Central to Peripheral Coded Rates: 0x03",
+                "    CODED S=8",
+                "    CODED S=2",
+                "  Peripheral to Central Coded Rates: 0x02",
+                "    CODED S=2",
+                "  Central to Peripheral HDT Rates: 0x001f",
+                "    HDT 2M",
+                "    HDT 3M",
+                "    HDT 4M",
+                "    HDT 6M",
+                "    HDT 7.5M",
+                "  Peripheral to Central HDT Rates: 0x0001",
+                "    HDT 2M",
+                "  MIC Length: 128 bits (0x02)",
+                "  Packet Format: No preferred format (0x00)",
+            ]
+        );
+        let lines = rsp_lines(&mut st, cmd::LE_SET_CIG_PARAMETERS_V2, &[0x00, 0x00, 0x01, 0x05, 0x00]);
+        assert_eq!(lines[3], "Connection Handle #0: 5");
+        assert_eq!(st.pending_iso, [5]);
+    }
+
+    #[test]
+    fn set_cig_parameters_test_v2_params() {
+        let mut st = IndexState::default();
+        // CIG ID, SDU intervals, FTs, ISO interval, SCA, anchor update buffer time, packing, framing, CIS count
+        let mut data = vec![
+            0x01, 0x10, 0x27, 0x00, 0x10, 0x27, 0x00, 0x02, 0x02, 0x08, 0x00, 0x00, 0xe8, 0x03, 0x00, 0x00, 0x01,
+        ];
+        // CIS ID, NSE, max SDUs, max PDUs, PHYs, BNs
+        data.extend_from_slice(&[0x00, 0x04, 0x28, 0x00, 0x28, 0x00, 0x2c, 0x00, 0x2c, 0x00, 0x10, 0x10, 0x01, 0x01]);
+        // coded rates, HDT rates, MIC length, packet format, payload window sizes
+        data.extend_from_slice(&[0x00, 0x00, 0x04, 0x00, 0x04, 0x00, 0x01, 0x02, 0x04, 0x02]);
+        let lines = cmd_lines(&mut st, cmd::LE_SET_CIG_PARAMETERS_TEST_V2, &data);
+        assert_eq!(lines[7], "Anchor Update Buffer Time: 1000 us");
+        assert_eq!(lines[8], "Packing: Sequential (0x00)");
+        assert_eq!(
+            lines[lines.len() - 4..],
+            [
+                "  MIC Length: Prefer 64 bits (0x01)",
+                "  Packet Format: Packet Format 1 (0x02)",
+                "  Central to Peripheral Payload Window size: 4",
+                "  Peripheral to Central Payload Window size: 2",
+            ]
+        );
+    }
+
+    #[test]
     fn set_cig_parameters_rsp() {
         let mut st = IndexState::default();
         let lines = rsp_lines(&mut st, cmd::LE_SET_CIG_PARAMETERS, &[0x00, 0x00, 0x02, 0x01, 0x00, 0x02, 0x00]);
@@ -1530,6 +1645,40 @@ mod tests {
         assert_eq!(
             lines,
             ["Number of CIS: 1", "CIS Handle: 1", "ACL Handle: 16 Address: 5C:F3:70:9C:2C:D7 (Public)"]
+        );
+    }
+
+    #[test]
+    fn create_big_v2_params() {
+        let mut st = IndexState::default();
+        let mut data = vec![0x00, 0x01, 0x02, 0x10, 0x27, 0x00, 0x28, 0x00, 0x0a, 0x00, 0x02, 0x10, 0x00, 0x00, 0x00];
+        data.extend_from_slice(&[0x00; 16]);
+        data.extend_from_slice(&[0x03, 0x1f, 0x00, 0x02, 0x00]);
+        let lines = cmd_lines(&mut st, cmd::LE_CREATE_BIG_V2, &data);
+        assert_eq!(lines[7..9], ["PHY: 0x10", "  LE HDT"]);
+        assert_eq!(lines[13], "Coded Rates: 0x03");
+        assert_eq!(lines[16], "HDT Rates: 0x001f");
+        assert_eq!(lines[22..], ["MIC Length: 128 bits (0x02)", "Packet Format: No preferred format (0x00)"]);
+
+        // BIG handle, adv handle, num BIS, SDU interval, ISO interval, NSE, max SDU, max PDU, PHY,
+        // packing, framing, BN, IRC, PTO, encryption
+        let mut data = vec![
+            0x00, 0x01, 0x01, 0x10, 0x27, 0x00, 0x08, 0x00, 0x04, 0x28, 0x00, 0x2c, 0x00, 0x10, 0x00, 0x00, 0x01, 0x01,
+            0x00, 0x00,
+        ];
+        data.extend_from_slice(&[0x00; 16]);
+        data.extend_from_slice(&[0x00, 0x02, 0x00, 0x01, 0x01, 0x08]);
+        let lines = cmd_lines(&mut st, cmd::LE_CREATE_BIG_TEST_V2, &data);
+        assert_eq!(
+            lines[lines.len() - 6..],
+            [
+                "Coded Rates: 0x00",
+                "HDT Rates: 0x0002",
+                "  HDT 3M",
+                "MIC Length: Prefer 64 bits (0x01)",
+                "Packet Format: Packet Format 0 (0x01)",
+                "Blocks per Payload: 8",
+            ]
         );
     }
 

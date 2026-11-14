@@ -47,9 +47,10 @@ pub fn le_event_params(st: &mut IndexState, sub: u8, r: &mut Reader<'_>, out: &m
         le_evt::PERIODIC_ADVERTISING_SYNC_TRANSFER_RECEIVED => {
             periodic_advertising_sync_transfer_received(st, r, out, false)?
         }
-        le_evt::CIS_ESTABLISHED => cis_established(st, r, out, false)?,
+        le_evt::CIS_ESTABLISHED => cis_established(st, r, out, 1)?,
         le_evt::CIS_REQUEST => cis_request(st, r, out)?,
-        le_evt::CREATE_BIG_COMPLETE => create_big_complete(st, r, out)?,
+        le_evt::CREATE_BIG_COMPLETE => create_big_complete(st, r, out, false)?,
+        le_evt::CREATE_BIG_COMPLETE_V2 => create_big_complete(st, r, out, true)?,
         le_evt::TERMINATE_BIG_COMPLETE | le_evt::BIG_SYNC_LOST => big_handle_reason(r, out)?,
         le_evt::BIG_SYNC_ESTABLISHED => big_sync_established(st, r, out)?,
         le_evt::REQUEST_PEER_SCA_COMPLETE => request_peer_sca_complete(st, r, out)?,
@@ -65,7 +66,8 @@ pub fn le_event_params(st: &mut IndexState, sub: u8, r: &mut Reader<'_>, out: &m
         le_evt::PERIODIC_ADVERTISING_SUBEVENT_DATA_REQUEST => periodic_advertising_subevent_data_request(r, out)?,
         le_evt::PERIODIC_ADVERTISING_RESPONSE_REPORT => periodic_advertising_response_report(r, out)?,
         le_evt::ENHANCED_CONNECTION_COMPLETE_V2 => connection_complete(st, r, out, ConnComplete::EnhancedV2)?,
-        le_evt::CIS_ESTABLISHED_V2 => cis_established(st, r, out, true)?,
+        le_evt::CIS_ESTABLISHED_V2 => cis_established(st, r, out, 2)?,
+        le_evt::CIS_ESTABLISHED_V3 => cis_established(st, r, out, 3)?,
         le_evt::READ_ALL_REMOTE_FEATURES_COMPLETE => read_all_remote_features_complete(st, r, out)?,
         le_evt::CS_READ_REMOTE_SUPPORTED_CAPABILITIES_COMPLETE => {
             cs_read_remote_supported_capabilities_complete(st, r, out, false)?
@@ -197,7 +199,7 @@ fn data_status(r: &mut Reader<'_>, out: &mut Out, failed: &str) -> Result<u8> {
 
 /// PHY of a periodic advertiser / ISO stream (`LE 1M`, `LE 2M`, `LE Coded`).
 fn le_phy(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
-    enum8(label, r, out, &[(0x01, "LE 1M"), (0x02, "LE 2M"), (0x03, "LE Coded")])
+    enum8(label, r, out, &[(0x01, "LE 1M"), (0x02, "LE 2M"), (0x03, "LE Coded"), (0x05, "LE HDT")])
 }
 
 /// ISO framing (CIS Established v2, BIGInfo).
@@ -859,7 +861,10 @@ fn connection_iq_report(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> R
 // ---------------------------------------------------------------------------
 
 /// LE CIS Established v1 (0x19) / v2 (0x2a) (7.7.65.25).
-fn cis_established(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
+/// LE CIS Established v1 (0x19), v2 (0x2a, adds the sub-interval, SDU sizes and intervals and the
+/// framing) and v3 (0x3a, adds the rates, the CIG configuration, the transport latency group and
+/// the encryption and MIC length).
+fn cis_established(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, version: u8) -> Result<()> {
     let s = status(r, out)?;
     let h = read_handle(r)?;
     field!(out, "Connection handle: {}", h);
@@ -867,8 +872,8 @@ fn cis_established(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, v2: b
     usec24("CIS synchronization delay", r, out)?;
     usec24("Central to Peripheral latency", r, out)?;
     usec24("Peripheral to Central latency", r, out)?;
-    le_phy("Central to Peripheral PHY", r, out)?;
-    le_phy("Peripheral to Central PHY", r, out)?;
+    let c_phy = le_phy("Central to Peripheral PHY", r, out)?;
+    let p_phy = le_phy("Peripheral to Central PHY", r, out)?;
     u8_field("Number of subevents", r, out)?;
     u8_field("Central to Peripheral burst number", r, out)?;
     u8_field("Peripheral to Central burst number", r, out)?;
@@ -877,13 +882,26 @@ fn cis_established(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, v2: b
     u16_field("Central to Peripheral MTU", r, out)?;
     u16_field("Peripheral to Central MTU", r, out)?;
     interval("ISO interval", r, out, 1250)?;
-    if v2 {
+    if version >= 2 {
         usec24("Sub interval", r, out)?;
         u16_field("Central to Peripheral maximum SDU", r, out)?;
         u16_field("Peripheral to Central maximum SDU", r, out)?;
         usec24("Central to Peripheral SDU interval", r, out)?;
         usec24("Peripheral to Central SDU interval", r, out)?;
         framing(r, out)?;
+    }
+    if version >= 3 {
+        rates("Central to Peripheral rates", c_phy, r, out)?;
+        rates("Peripheral to Central rates", p_phy, r, out)?;
+        u8_field("Config ID", r, out)?;
+        u8_field("Group ID", r, out)?;
+        enum8(
+            "Encryption",
+            r,
+            out,
+            &[(0x00, "Disabled"), (0x01, "Enabled"), (0x02, "Key Schedule"), (0x03, "Opportunistic and Key Schedule")],
+        )?;
+        mic_length(r, out)?;
     }
     st.pending_iso.retain(|&p| p != h);
     if s == 0 {
@@ -916,13 +934,19 @@ fn cis_request(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result
 }
 
 /// LE Create BIG Complete (7.7.65.27).
-fn create_big_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// LE Create BIG Complete v1 (0x1b) and v2 (0x3b, adds the rates, encryption and MIC length).
+fn create_big_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     let s = status(r, out)?;
     big_handle(r, out)?;
     usec24("BIG synchronization delay", r, out)?;
     usec24("Transport latency", r, out)?;
-    le_phy("PHY", r, out)?;
+    let phy = le_phy("PHY", r, out)?;
     big_params(r, out)?;
+    if v2 {
+        rates("Rates", phy, r, out)?;
+        encryption(r, out)?;
+        mic_length(r, out)?;
+    }
     bis_handles(st, r, out, s == 0)
 }
 
@@ -1565,6 +1589,57 @@ mod tests {
         assert_eq!(lines[13], "Connection handle #1: 17");
         assert_eq!(st.conn(0x10).unwrap().link, LinkType::Iso);
         assert_eq!(st.conn(0x11).unwrap().link, LinkType::Iso);
+    }
+
+    #[test]
+    fn cis_established_v3_params() {
+        let mut data = vec![
+            0x00, 0x03, 0x00, 0x10, 0x27, 0x00, 0x10, 0x27, 0x00, 0x20, 0x4e, 0x00, 0x20, 0x4e, 0x00, 0x05, 0x03, 0x02,
+            0x01, 0x01, 0x02, 0x02, 0x64, 0x00, 0x64, 0x00, 0x08, 0x00,
+        ];
+        data.extend_from_slice(&[0x10, 0x27, 0x00, 0x64, 0x00, 0x64, 0x00, 0x10, 0x27, 0x00, 0x10, 0x27, 0x00, 0x00]);
+        data.extend_from_slice(&[0x09, 0x00, 0x01, 0x00, 0x02, 0x05, 0x02, 0x01]);
+        let (st, nodes) = run(le_evt::CIS_ESTABLISHED_V3, &data);
+        let lines = texts(&nodes);
+        assert_eq!(lines[6], "Central to Peripheral PHY: LE HDT (0x05)");
+        assert_eq!(lines[7], "Peripheral to Central PHY: LE Coded (0x03)");
+        assert_eq!(
+            lines[22..],
+            [
+                "Central to Peripheral rates: 0x0009",
+                "Peripheral to Central rates: 0x0001",
+                "Config ID: 2",
+                "Group ID: 5",
+                "Encryption: Key Schedule (0x02)",
+                "MIC length: 64 bits (0x01)",
+            ]
+        );
+        assert_eq!(child_texts(&nodes[22]), ["HDT 2M", "HDT 6M"]);
+        assert_eq!(child_texts(&nodes[23]), ["CODED S=8"]);
+        assert_eq!(st.conn(3).unwrap().link, LinkType::Iso);
+    }
+
+    #[test]
+    fn create_big_complete_v2_params() {
+        let data = [
+            0x00, 0x01, 0x30, 0x00, 0x00, 0x30, 0x00, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x64, 0x00, 0x08, 0x00, 0x1f,
+            0x00, 0x01, 0x02, 0x01, 0x10, 0x00,
+        ];
+        let (st, nodes) = run(le_evt::CREATE_BIG_COMPLETE_V2, &data);
+        let lines = texts(&nodes);
+        assert_eq!(lines[4], "PHY: LE HDT (0x05)");
+        assert_eq!(
+            lines[11..],
+            [
+                "Rates: 0x001f",
+                "Encryption: Encrypted (0x01)",
+                "MIC length: 128 bits (0x02)",
+                "Number of BIS: 1",
+                "Connection handle #0: 16",
+            ]
+        );
+        assert_eq!(child_texts(&nodes[11]), ["HDT 2M", "HDT 3M", "HDT 4M", "HDT 6M", "HDT 7.5M"]);
+        assert_eq!(st.conn(0x10).unwrap().link, LinkType::Iso);
     }
 
     #[test]

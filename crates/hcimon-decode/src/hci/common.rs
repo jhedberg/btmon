@@ -561,13 +561,30 @@ pub fn phy_mask(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
 /// HDT rates (bits 0 to 4: HDT2, HDT3, HDT4, HDT6 and HDT7.5) of the LE HDT PHY, as the HDT
 /// commands and events of Core 7.0 carry them.
 pub fn hdt_rates(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u16> {
-    mask16(
-        label,
-        r,
-        out,
-        &[(0, "HDT 2M"), (1, "HDT 3M"), (2, "HDT 4M"), (3, "HDT 6M"), (4, "HDT 7.5M")],
-        16,
-    )
+    mask16(label, r, out, HDT_RATE_BITS, 16)
+}
+
+/// Coded rates (bit 0: S=8, bit 1: S=2) of the LE Coded PHY, as the CIG and BIG commands of
+/// Core 7.0 carry them.
+pub fn coded_rates(label: &str, r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    mask8(label, r, out, CODED_RATE_BITS, 8)
+}
+
+static CODED_RATE_BITS: &[(u8, &str)] = &[(0, "CODED S=8"), (1, "CODED S=2")];
+static HDT_RATE_BITS: &[(u8, &str)] = &[(0, "HDT 2M"), (1, "HDT 3M"), (2, "HDT 4M"), (3, "HDT 6M"), (4, "HDT 7.5M")];
+
+/// The rates in use of the ISO events of Core 7.0: the bits are the codings of the LE Coded PHY
+/// or the rates of the LE HDT PHY, depending on `phy`, and are ignored on the other PHYs.
+pub fn rates(label: &str, phy: u8, r: &mut Reader<'_>, out: &mut Out) -> Result<u16> {
+    let v = r.u16()?;
+    field!(out, "{}: 0x{:04x}", label, v);
+    let names = match phy {
+        0x03 => CODED_RATE_BITS,
+        0x05 => HDT_RATE_BITS,
+        _ => return Ok(v),
+    };
+    out.nest(|o| bits(o, v as u64, names, 16));
+    Ok(v)
 }
 
 /// The preferred HDT packet format of the HDT commands of Core 7.0.
