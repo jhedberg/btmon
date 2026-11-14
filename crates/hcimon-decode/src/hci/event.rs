@@ -25,9 +25,15 @@ pub fn event_params(st: &mut IndexState, code: u8, r: &mut Reader<'_>, out: &mut
         evt::AUTHENTICATION_COMPLETE
         | evt::CHANGE_CONNECTION_LINK_KEY_COMPLETE
         | evt::ENCRYPTION_KEY_REFRESH_COMPLETE => status_handle(st, r, out)?,
+        evt::ENCRYPTION_KEY_REFRESH_COMPLETE_V2 => {
+            status_handle(st, r, out)?;
+            mic_length(r, out)?;
+            key_schedule(r, out)?;
+        }
         evt::REMOTE_NAME_REQUEST_COMPLETE => remote_name_request_complete(r, out)?,
-        evt::ENCRYPTION_CHANGE => encryption_change(st, r, out, false)?,
-        evt::ENCRYPTION_CHANGE_V2 => encryption_change(st, r, out, true)?,
+        evt::ENCRYPTION_CHANGE => encryption_change(st, r, out, 1)?,
+        evt::ENCRYPTION_CHANGE_V2 => encryption_change(st, r, out, 2)?,
+        evt::ENCRYPTION_CHANGE_V3 => encryption_change(st, r, out, 3)?,
         evt::LINK_KEY_TYPE_CHANGED => link_key_type_changed(st, r, out)?,
         evt::READ_REMOTE_SUPPORTED_FEATURES_COMPLETE => read_remote_supported_features_complete(st, r, out)?,
         evt::READ_REMOTE_VERSION_INFORMATION_COMPLETE => read_remote_version_information_complete(st, r, out)?,
@@ -250,13 +256,18 @@ fn remote_name_request_complete(r: &mut Reader<'_>, out: &mut Out) -> Result<()>
     Ok(())
 }
 
-/// Encryption Change v1 (0x08) and v2 (0x59, adds the key size).
-fn encryption_change(st: &IndexState, r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
+/// Encryption Change v1 (0x08), v2 (0x59, adds the key size) and v3 (0x5a, adds the MIC length
+/// and the Encryption Key Schedule).
+fn encryption_change(st: &IndexState, r: &mut Reader<'_>, out: &mut Out, version: u8) -> Result<()> {
     status(r, out)?;
     let h = handle(st, r, out)?;
     encryption_mode(st, h, r, out)?;
-    if v2 {
+    if version >= 2 {
         u8_field("Key size", r, out)?;
+    }
+    if version >= 3 {
+        mic_length(r, out)?;
+        key_schedule(r, out)?;
     }
     Ok(())
 }
@@ -821,6 +832,44 @@ mod tests {
 
         let out = decode(&mut st, evt::ENCRYPTION_CHANGE, &[0x00, 0x01, 0x00, 0x02]);
         assert_eq!(roots(&out)[2], "Encryption: Enabled with AES-CCM (0x02)");
+    }
+
+    #[test]
+    fn encryption_key_schedule_events() {
+        let mut st = IndexState::default();
+        register_connection(&mut st, 2, LinkType::Le, 1, BdAddr::ZERO, 0);
+
+        let out = decode(&mut st, evt::ENCRYPTION_CHANGE_V3, &[0x00, 0x02, 0x00, 0x01, 0x10, 0x01, 0x02, 0x01]);
+        assert_eq!(
+            roots(&out),
+            [
+                "Status: Success (0x00)",
+                "Handle: 2",
+                "Encryption: Enabled with AES-CCM (0x01)",
+                "Key size: 16",
+                "MIC length: 64 bits (0x01)",
+                "Key Schedule: opportunistic AES-CCM (0x02)",
+                "EKS Debug: Enabled (0x01)",
+            ]
+        );
+
+        let out = decode(&mut st, evt::ENCRYPTION_KEY_REFRESH_COMPLETE_V2, &[0x00, 0x02, 0x00, 0x02, 0x01, 0x00]);
+        assert_eq!(
+            roots(&out),
+            [
+                "Status: Success (0x00)",
+                "Handle: 2",
+                "MIC length: 128 bits (0x02)",
+                "Key Schedule: AES-CCM (0x01)",
+                "EKS Debug: Disabled (0x00)",
+            ]
+        );
+
+        let out = decode(&mut st, evt::ENCRYPTION_KEY_REFRESH_COMPLETE_V2, &[0x00, 0x02, 0x00, 0x03, 0x03, 0x02]);
+        assert_eq!(
+            &roots(&out)[2..],
+            ["MIC length: Reserved (0x03)", "Key Schedule: Reserved (0x03)", "EKS Debug: Reserved (0x02)"]
+        );
     }
 
     #[test]

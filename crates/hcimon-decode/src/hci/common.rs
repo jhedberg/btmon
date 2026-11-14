@@ -583,6 +583,25 @@ pub fn mask16(label: &str, r: &mut Reader<'_>, out: &mut Out, names: &[(u8, &str
     Ok(v)
 }
 
+/// MIC_Length of the encryption and ISO events (Core 7.0): the MIC length in use.
+pub fn mic_length(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    enum8("MIC length", r, out, &[(0x00, "32 bits"), (0x01, "64 bits"), (0x02, "128 bits")])
+}
+
+/// HDT_MIC_Length of the commands that start or refresh encryption (Core 7.0): the MIC length
+/// preferred on the LE HDT PHY.
+pub fn hdt_mic_length(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    enum8("MIC Length", r, out, &[(0x01, "Prefer 64 bits"), (0x02, "128 bits")])
+}
+
+/// Key_Schedule_Enabled and Key_Schedule_Debug_Flag of Encryption Change v3 and Encryption Key
+/// Refresh Complete v2.
+pub fn key_schedule(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    enum8("Key Schedule", r, out, &[(0x00, "off"), (0x01, "AES-CCM"), (0x02, "opportunistic AES-CCM")])?;
+    enum8("EKS Debug", r, out, &[(0x00, "Disabled"), (0x01, "Enabled")])?;
+    Ok(())
+}
+
 /// Eight-byte bit mask: `Label: 0x.. 0x..` followed by one child per set bit.
 pub fn mask64(label: &str, r: &mut Reader<'_>, out: &mut Out, names: &[(u8, &str)]) -> Result<u64> {
     let b = r.array::<8>()?;

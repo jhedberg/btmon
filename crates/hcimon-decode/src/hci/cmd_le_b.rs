@@ -164,6 +164,14 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
         }
         cmd::LE_SET_DEFAULT_RATE_PARAMETERS => rate_params(r, out)?,
         cmd::LE_SET_EVENT_MASK_V2 => le_event_mask_v2(r, out)?,
+        cmd::LE_ENABLE_ENCRYPTION_V2 => {
+            super::cmd_le_a::le_enable_encryption(st, r, out)?;
+            hdt_mic_length(r, out)?;
+            enum8("Encryption", r, out, &[(0x00, "LTK"), (0x01, "Opportunistic with Key Schedule")])?;
+        }
+        cmd::LE_WRITE_ENCRYPTION_KEY_SCHEDULE_DEBUG_MODE => {
+            eks_debug_mode(r, out)?;
+        }
         _ => return Ok(false),
     }
     Ok(true)
@@ -294,6 +302,12 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
             u8_field("List size", r, out)?;
         }
         cmd::LE_READ_MINIMUM_SUPPORTED_CONNECTION_INTERVAL => read_min_supported_conn_interval_rsp(r, out)?,
+        cmd::LE_READ_ENCRYPTION_KEY_SCHEDULE_DEBUG_MODE => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            eks_debug_mode(r, out)?;
+        }
         _ => return Ok(false),
     }
     Ok(true)
@@ -302,6 +316,12 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
 // ---------------------------------------------------------------------------
 // Small formatting helpers used by several decoders in this file.
 // ---------------------------------------------------------------------------
+
+/// Debug_Mode of LE Read/Write Encryption Key Schedule Debug Mode (7.8.161, 7.8.162): whether the
+/// debug key pair is used locally (Enable) or only accepted from the peer (Accept).
+fn eks_debug_mode(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    enum8("Debug Mode", r, out, &[(0x00, "Disable"), (0x01, "Accept"), (0x02, "Enable")])
+}
 
 fn cig_id(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     u8_hex("CIG ID", r, out)
@@ -1903,6 +1923,44 @@ mod tests {
                 "CS enhancements: 0x01",
                 "  IPT enabled in the CS reflector",
             ]
+        );
+    }
+
+    #[test]
+    fn encryption_key_schedule_commands() {
+        let mut st = IndexState::default();
+        let mut data = vec![0x01, 0x00, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00];
+        data.extend_from_slice(&[0x00; 16]);
+        data.extend_from_slice(&[0x01, 0x01]);
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_ENABLE_ENCRYPTION_V2, &data),
+            [
+                "Handle: 1",
+                "Random number: 0x0102030405060708",
+                "Encrypted diversifier: 0x0000",
+                "Long term key: 00000000000000000000000000000000",
+                "MIC Length: Prefer 64 bits (0x01)",
+                "Encryption: Opportunistic with Key Schedule (0x01)",
+            ]
+        );
+        let n = data.len();
+        data[n - 2] = 0x00;
+        data[n - 1] = 0x00;
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_ENABLE_ENCRYPTION_V2, &data)[4..],
+            ["MIC Length: Reserved (0x00)", "Encryption: LTK (0x00)"]
+        );
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_WRITE_ENCRYPTION_KEY_SCHEDULE_DEBUG_MODE, &[0x01]),
+            ["Debug Mode: Accept (0x01)"]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_READ_ENCRYPTION_KEY_SCHEDULE_DEBUG_MODE, &[0x00, 0x02]),
+            ["Status: Success (0x00)", "Debug Mode: Enable (0x02)"]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_READ_ENCRYPTION_KEY_SCHEDULE_DEBUG_MODE, &[0x01]),
+            ["Status: Unknown HCI Command (0x01)"]
         );
     }
 

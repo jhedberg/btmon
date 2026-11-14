@@ -98,6 +98,10 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
         | cmd::READ_ENCRYPTION_KEY_SIZE => {
             handle(st, r, out)?;
         }
+        cmd::REFRESH_ENCRYPTION_KEY_V2 => {
+            handle(st, r, out)?;
+            hdt_mic_length(r, out)?;
+        }
         cmd::SET_CONNECTION_ENCRYPTION => {
             handle(st, r, out)?;
             enum8("Encryption", r, out, &[(0x00, "Disabled"), (0x01, "Enabled")])?;
@@ -2435,6 +2439,14 @@ mod tests {
         let mut r = Reader::new(&[0x01]);
         assert!(!command_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
         assert!(!return_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
+    }
+
+    #[test]
+    fn refresh_encryption_key_v2_params() {
+        assert_eq!(
+            cmd_lines(cmd::REFRESH_ENCRYPTION_KEY_V2, &[0x40, 0x00, 0x02]),
+            ["Handle: 64", "MIC Length: 128 bits (0x02)"]
+        );
     }
 
     #[test]

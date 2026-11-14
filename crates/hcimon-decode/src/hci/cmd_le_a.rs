@@ -77,13 +77,7 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
             key128("Key", r, out)?;
             key128("Plaintext data", r, out)?;
         }
-        cmd::LE_ENABLE_ENCRYPTION => {
-            handle(st, r, out)?;
-            random_number(r, out)?;
-            let ediv = r.u16()?;
-            field!(out, "Encrypted diversifier: 0x{:04x}", ediv);
-            key128("Long term key", r, out)?;
-        }
+        cmd::LE_ENABLE_ENCRYPTION => le_enable_encryption(st, r, out)?,
         cmd::LE_LONG_TERM_KEY_REQUEST_REPLY => {
             handle(st, r, out)?;
             key128("Long term key", r, out)?;
@@ -623,6 +617,16 @@ static PAST_MODES: &[(u8, &str)] = &[
 
 // ---------------------------------------------------------------------------
 // Field helpers private to this module
+
+/// The parameters of LE Enable Encryption, which v2 extends.
+pub(super) fn le_enable_encryption(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    handle(st, r, out)?;
+    random_number(r, out)?;
+    let ediv = r.u16()?;
+    field!(out, "Encrypted diversifier: 0x{:04x}", ediv);
+    key128("Long term key", r, out)?;
+    Ok(())
+}
 
 fn le_event_mask(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     let b = r.array::<8>()?;
