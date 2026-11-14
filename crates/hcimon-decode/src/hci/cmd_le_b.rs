@@ -1226,6 +1226,13 @@ fn cs_capabilities(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
 fn cs_set_default_settings(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     handle(st, r, out)?;
     mask8("Role enable", r, out, CS_ROLES, 8)?;
+    cs_sync_antenna_selection(r, out)?;
+    power_dbm("Max TX power", r, out)?;
+    Ok(())
+}
+
+/// CS_SYNC_Antenna_Selection of LE CS Set Default Settings and (Core 7.0) LE CS Test.
+fn cs_sync_antenna_selection(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     let a = r.u8()?;
     match a {
         0x01..=0x04 => field!(out, "CS_SYNC antenna selection: Antenna {} (0x{:02x})", a, a),
@@ -1234,8 +1241,7 @@ fn cs_set_default_settings(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -
         0xff => field!(out, "CS_SYNC antenna selection: No recommendation (0xff)"),
         _ => out.unknown(format!("CS_SYNC antenna selection: Reserved (0x{a:02x})")),
     };
-    power_dbm("Max TX power", r, out)?;
-    Ok(())
+    Ok(a)
 }
 
 fn cs_mode(label: &str, r: &mut Reader<'_>, out: &mut Out, allow_unused: bool) -> Result<u8> {
@@ -1459,7 +1465,7 @@ fn cs_test(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     cs_role(r, out)?;
     cs_rtt_type(r, out)?;
     cs_sync_phy(r, out)?;
-    u8_field("CS_SYNC antenna selection", r, out)?;
+    cs_sync_antenna_selection(r, out)?;
     usec24("Subevent length", r, out)?;
     let v = r.u16()?;
     if v == 0 {
@@ -2661,7 +2667,7 @@ mod tests {
                 "Role: Initiator (0x00)",
                 "RTT type: RTT AA-only (0x00)",
                 "CS_SYNC PHY: LE 1M (0x01)",
-                "CS_SYNC antenna selection: 1",
+                "CS_SYNC antenna selection: Antenna 1 (0x01)",
                 "Subevent length: 1250 us (0x0004e2)",
                 "Subevent interval: Single CS subevent (0x0000)",
                 "Max number of subevents: No restriction (0x00)",
