@@ -334,11 +334,15 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
         cmd::SET_CONTROLLER_TO_HOST_FLOW_CONTROL => {
             host_flow_control(r, out)?;
         }
-        cmd::HOST_BUFFER_SIZE => {
+        cmd::HOST_BUFFER_SIZE | cmd::HOST_BUFFER_SIZE_V2 => {
             u16_field("ACL MTU", r, out)?;
             u8_field("SCO MTU", r, out)?;
             u16_field("ACL max packet", r, out)?;
             u16_field("SCO max packet", r, out)?;
+            if opcode == cmd::HOST_BUFFER_SIZE_V2 {
+                u16_field("ISO MTU", r, out)?;
+                u16_field("ISO max packet", r, out)?;
+            }
         }
         cmd::HOST_NUMBER_OF_COMPLETED_PACKETS => {
             let n = r.u8()?;
@@ -1632,6 +1636,8 @@ fn hold_mode_activity(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     Ok(v)
 }
 
+/// Flow_Control_Enable of Set Controller To Host Flow Control: one bit each for ACL, synchronous
+/// and (Core 7.0) ISO Data packets.
 fn host_flow_control(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     enum8(
         "Flow control",
@@ -1642,6 +1648,10 @@ fn host_flow_control(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
             (0x01, "ACL Data Packets"),
             (0x02, "Synchronous Data Packets"),
             (0x03, "ACL and Synchronous Data Packets"),
+            (0x04, "ISO Data Packets"),
+            (0x05, "ACL and ISO Data Packets"),
+            (0x06, "Synchronous and ISO Data Packets"),
+            (0x07, "ACL, Synchronous and ISO Data Packets"),
         ],
     )
 }
@@ -2459,6 +2469,27 @@ mod tests {
         let mut r = Reader::new(&[0x01]);
         assert!(!command_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
         assert!(!return_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
+    }
+
+    #[test]
+    fn host_buffer_size_v2_and_iso_flow_control() {
+        let data = [0xfd, 0x03, 0x40, 0x10, 0x00, 0x00, 0x00, 0xfb, 0x00, 0x08, 0x00];
+        assert_eq!(
+            cmd_lines(cmd::HOST_BUFFER_SIZE_V2, &data),
+            [
+                "ACL MTU: 1021",
+                "SCO MTU: 64",
+                "ACL max packet: 16",
+                "SCO max packet: 0",
+                "ISO MTU: 251",
+                "ISO max packet: 8",
+            ]
+        );
+        assert_eq!(
+            cmd_lines(cmd::SET_CONTROLLER_TO_HOST_FLOW_CONTROL, &[0x05]),
+            ["Flow control: ACL and ISO Data Packets (0x05)"]
+        );
+        assert_eq!(cmd_lines(cmd::SET_CONTROLLER_TO_HOST_FLOW_CONTROL, &[0x08]), ["Flow control: Reserved (0x08)"]);
     }
 
     #[test]
