@@ -13,12 +13,6 @@ use crate::field;
 use crate::reader::{BdAddr, Reader, Result};
 use crate::tree::Out;
 
-// Subevent codes the generated `le_evt` table has no constants for.
-const PERIODIC_ADVERTISING_SYNC_ESTABLISHED_V2: u8 = 0x24;
-const PERIODIC_ADVERTISING_REPORT_V2: u8 = 0x25;
-const PERIODIC_ADVERTISING_SYNC_TRANSFER_RECEIVED_V2: u8 = 0x26;
-const ENHANCED_CONNECTION_COMPLETE_V2: u8 = 0x29;
-
 /// Decode the parameters of the LE subevent with the given code.
 pub fn le_event_params(st: &mut IndexState, sub: u8, r: &mut Reader<'_>, out: &mut Out) -> Result<bool> {
     match sub {
@@ -61,14 +55,14 @@ pub fn le_event_params(st: &mut IndexState, sub: u8, r: &mut Reader<'_>, out: &m
         le_evt::TRANSMIT_POWER_REPORTING => transmit_power_reporting(st, r, out)?,
         le_evt::BIGINFO_ADVERTISING_REPORT => biginfo_advertising_report(r, out)?,
         le_evt::SUBRATE_CHANGE => subrate_change(st, r, out)?,
-        PERIODIC_ADVERTISING_SYNC_ESTABLISHED_V2 => periodic_advertising_sync_established(r, out, true)?,
-        PERIODIC_ADVERTISING_REPORT_V2 => periodic_advertising_report(r, out, true)?,
-        PERIODIC_ADVERTISING_SYNC_TRANSFER_RECEIVED_V2 => {
+        le_evt::PERIODIC_ADVERTISING_SYNC_ESTABLISHED_V2 => periodic_advertising_sync_established(r, out, true)?,
+        le_evt::PERIODIC_ADVERTISING_REPORT_V2 => periodic_advertising_report(r, out, true)?,
+        le_evt::PERIODIC_ADVERTISING_SYNC_TRANSFER_RECEIVED_V2 => {
             periodic_advertising_sync_transfer_received(st, r, out, true)?
         }
         le_evt::PERIODIC_ADVERTISING_SUBEVENT_DATA_REQUEST => periodic_advertising_subevent_data_request(r, out)?,
         le_evt::PERIODIC_ADVERTISING_RESPONSE_REPORT => periodic_advertising_response_report(r, out)?,
-        ENHANCED_CONNECTION_COMPLETE_V2 => connection_complete(st, r, out, ConnComplete::EnhancedV2)?,
+        le_evt::ENHANCED_CONNECTION_COMPLETE_V2 => connection_complete(st, r, out, ConnComplete::EnhancedV2)?,
         le_evt::CIS_ESTABLISHED_V2 => cis_established(st, r, out, true)?,
         le_evt::READ_ALL_REMOTE_FEATURES_COMPLETE => read_all_remote_features_complete(st, r, out)?,
         le_evt::CS_READ_REMOTE_SUPPORTED_CAPABILITIES_COMPLETE => {
@@ -1469,7 +1463,7 @@ mod tests {
         let mut data = vec![0x00, 0x40, 0x00, 0x01, 0x01, 0x5a, 0x65, 0x27, 0x2e, 0x1d, 0x5e];
         data.extend_from_slice(&[0; 12]);
         data.extend_from_slice(&[0x18, 0x00, 0x00, 0x00, 0x2a, 0x00, 0x01, 0xff, 0xff, 0xff]);
-        let (st, nodes) = run(ENHANCED_CONNECTION_COMPLETE_V2, &data);
+        let (st, nodes) = run(le_evt::ENHANCED_CONNECTION_COMPLETE_V2, &data);
         let lines = texts(&nodes);
         assert_eq!(lines[2], "Role: Peripheral (0x01)");
         assert_eq!(lines[3], "Peer address type: Random (0x01)");
@@ -1548,7 +1542,7 @@ mod tests {
     #[test]
     fn periodic_advertising_report_v2_params() {
         let data = [0x02, 0x00, 0x7f, 0xd3, 0xff, 0x10, 0x00, 0x03, 0x00, 0x03, 0x02, 0x01, 0x06];
-        let (_, nodes) = run(PERIODIC_ADVERTISING_REPORT_V2, &data);
+        let (_, nodes) = run(le_evt::PERIODIC_ADVERTISING_REPORT_V2, &data);
         let lines = texts(&nodes);
         assert_eq!(
             &lines[..8],
@@ -1568,7 +1562,7 @@ mod tests {
     #[test]
     fn periodic_advertising_sync_established_v2_params() {
         let data = [0x00, 0x02, 0x00, 0x05, 0x00, 1, 2, 3, 4, 5, 6, 0x01, 0x50, 0x00, 0x07, 0x04, 0x06, 0x02, 0x04];
-        let (_, nodes) = run(PERIODIC_ADVERTISING_SYNC_ESTABLISHED_V2, &data);
+        let (_, nodes) = run(le_evt::PERIODIC_ADVERTISING_SYNC_ESTABLISHED_V2, &data);
         let lines = texts(&nodes);
         assert_eq!(lines[2], "Advertising SID: 0x05");
         assert_eq!(lines[5], "Advertiser PHY: LE 1M (0x01)");
