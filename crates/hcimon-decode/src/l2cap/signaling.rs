@@ -120,6 +120,7 @@ static LE_CONN_RESULTS: &[(u16, &str)] = &[
     (0x0009, "Connection refused - invalid Source CID"),
     (0x000a, "Connection refused - Source CID already allocated"),
     (0x000b, "Connection refused - unacceptable parameters"),
+    (0x000c, "Connection refused - MIC length too short"),
 ];
 
 /// Vol 3, Part A, Table 4.17.
@@ -135,6 +136,10 @@ static ECRED_CONN_RESULTS: &[(u16, &str)] = &[
     (0x000a, "Some connections refused - Source CID already allocated"),
     (0x000b, "All connections refused - unacceptable parameters"),
     (0x000c, "All connections refused - invalid parameters"),
+    (0x000d, "All connections pending - no further information available"),
+    (0x000e, "All connections pending - authentication pending"),
+    (0x000f, "All connections pending - authorization pending"),
+    (0x0010, "All connections refused - MIC length too short"),
 ];
 
 /// Vol 3, Part A, Table 4.18.
@@ -819,6 +824,18 @@ mod tests {
         assert_eq!(l[1..], ["  MTU: 256", "  MPS: 64", "  Destination CID: 64", "  Destination CID: 65"]);
         let l = run(&mut st, true, true, &[0x1a, 0x01, 0x02, 0x00, 0x01, 0x00]);
         assert_eq!(l[1], "  Result: Reconfiguration failed - reduction in size of MTU not allowed (0x0001)");
+    }
+
+    #[test]
+    fn mic_length_too_short_results() {
+        let mut st = IndexState::default();
+        let rsp = [0x15, 0x09, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00];
+        let l = run(&mut st, true, true, &rsp);
+        assert_eq!(l[5], "  Result: Connection refused - MIC length too short (0x000c)");
+        let l = run(&mut st, true, true, &[0x18, 0x0a, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00]);
+        assert_eq!(l[4], "  Result: All connections refused - MIC length too short (0x0010)");
+        let l = run(&mut st, true, true, &[0x18, 0x0b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0e, 0x00]);
+        assert_eq!(l[4], "  Result: All connections pending - authentication pending (0x000e)");
     }
 
     #[test]

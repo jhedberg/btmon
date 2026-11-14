@@ -72,6 +72,7 @@ pub fn error_name(code: u8) -> Option<&'static str> {
         0x11 => "Insufficient Resources",
         0x12 => "Database Out Of Sync",
         0x13 => "Value Not Allowed",
+        0x14 => "MIC Length Too Short",
         0x80..=0x9f => "Application Error",
         0xfc => "Write Request Rejected",
         0xfd => "Client Characteristic Configuration Descriptor Improperly Configured",
@@ -885,6 +886,8 @@ mod tests {
         assert!(st.conn(0x40).unwrap().att.pending.is_empty());
         let l = run(&mut st, false, &[0x01, 0x12, 0x01, 0x00, 0x85]);
         assert_eq!(l[3], "  Error: Application Error (0x85)");
+        let l = run(&mut st, false, &[0x01, 0x0a, 0x03, 0x00, 0x14]);
+        assert_eq!(l[3], "  Error: MIC Length Too Short (0x14)");
     }
 
     #[test]
