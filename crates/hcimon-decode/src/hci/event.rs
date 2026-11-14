@@ -101,6 +101,7 @@ pub fn event_params(st: &mut IndexState, code: u8, r: &mut Reader<'_>, out: &mut
         evt::CONNECTIONLESS_PERIPHERAL_BROADCAST_CHANNEL_MAP_CHANGE => afh_channel_map(r, out)?,
         evt::INQUIRY_RESPONSE_NOTIFICATION => inquiry_response_notification(r, out)?,
         evt::SAM_STATUS_CHANGE => sam_status_change(st, r, out)?,
+        evt::ENCRYPTION_KEY_DEBUG_REPORT => encryption_key_debug_report(st, r, out)?,
         vendor::EVT_VENDOR => return vendor::event_params(st, r, out),
         // Deprecated AMP events (0x40..0x4d except 0x48) and anything unknown
         // are left to the caller to hex dump.
@@ -269,6 +270,19 @@ fn encryption_change(st: &IndexState, r: &mut Reader<'_>, out: &mut Out, version
         mic_length(r, out)?;
         key_schedule(r, out)?;
     }
+    Ok(())
+}
+
+/// Encryption Key Debug Report (0x5c, 7.7.77): the session key and IV of an encrypted ACL or CIS,
+/// reported when the encryption key debug reporting mode is enabled.
+fn encryption_key_debug_report(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    handle(st, r, out)?;
+    let len = u8_field("Session key length", r, out)?;
+    let key = r.bytes(len as usize)?;
+    field!(out, "Session key: {}", hexstr(key));
+    let len = u8_field("IV length", r, out)?;
+    let iv = r.bytes(len as usize)?;
+    field!(out, "IV: {}", hexstr(iv));
     Ok(())
 }
 
@@ -832,6 +846,25 @@ mod tests {
 
         let out = decode(&mut st, evt::ENCRYPTION_CHANGE, &[0x00, 0x01, 0x00, 0x02]);
         assert_eq!(roots(&out)[2], "Encryption: Enabled with AES-CCM (0x02)");
+    }
+
+    #[test]
+    fn encryption_key_debug_report() {
+        let mut st = IndexState::default();
+        let mut data = vec![0x02, 0x00, 0x10];
+        data.extend(0x00..0x10u8);
+        data.extend_from_slice(&[0x08, 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7]);
+        let out = decode(&mut st, evt::ENCRYPTION_KEY_DEBUG_REPORT, &data);
+        assert_eq!(
+            roots(&out),
+            [
+                "Handle: 2",
+                "Session key length: 16",
+                "Session key: 000102030405060708090a0b0c0d0e0f",
+                "IV length: 8",
+                "IV: a0a1a2a3a4a5a6a7",
+            ]
+        );
     }
 
     #[test]

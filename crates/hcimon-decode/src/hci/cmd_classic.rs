@@ -616,6 +616,9 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
             enable("DM1 ACL-U mode", r, out)?;
             enable("eSCO loopback mode", r, out)?;
         }
+        cmd::WRITE_ENCRYPTION_KEY_DEBUG_REPORTING_MODE => {
+            encryption_key_debug_reporting_mode(r, out)?;
+        }
 
         _ => return Ok(false),
     }
@@ -1103,6 +1106,12 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
             status(r, out)?;
             loopback_mode(r, out)?;
         }
+        cmd::READ_ENCRYPTION_KEY_DEBUG_REPORTING_MODE => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            encryption_key_debug_reporting_mode(r, out)?;
+        }
 
         _ => return Ok(false),
     }
@@ -1477,6 +1486,17 @@ pub static EVENT_MASK_PAGE2_BITS: &[(u8, &str)] = &[
     (27, "Encryption Key Refresh Complete v2"),
     (28, "Encryption Key Debug Report"),
 ];
+
+/// Mode of Read/Write Encryption Key Debug Reporting Mode (7.6.9, 7.6.10): whether the Controller
+/// sends Encryption Key Debug Report events.  0x01 stops them for new connections only.
+fn encryption_key_debug_reporting_mode(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    enum8(
+        "Mode",
+        r,
+        out,
+        &[(0x00, "Disabled"), (0x01, "Disabled for new connections"), (0x02, "Enabled for new connections")],
+    )
+}
 
 fn event_mask(r: &mut Reader<'_>, out: &mut Out, table: &[(u8, &str)]) -> Result<u64> {
     let b = r.array::<8>()?;
@@ -2439,6 +2459,19 @@ mod tests {
         let mut r = Reader::new(&[0x01]);
         assert!(!command_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
         assert!(!return_params(&mut st, cmd::READ_LOCAL_AMP_INFO, &mut r, &mut out).unwrap());
+    }
+
+    #[test]
+    fn encryption_key_debug_reporting_mode() {
+        assert_eq!(
+            cmd_lines(cmd::WRITE_ENCRYPTION_KEY_DEBUG_REPORTING_MODE, &[0x02]),
+            ["Mode: Enabled for new connections (0x02)"]
+        );
+        assert_eq!(
+            rsp_lines(cmd::READ_ENCRYPTION_KEY_DEBUG_REPORTING_MODE, &[0x00, 0x01]),
+            ["Status: Success (0x00)", "Mode: Disabled for new connections (0x01)"]
+        );
+        assert_eq!(cmd_lines(cmd::WRITE_ENCRYPTION_KEY_DEBUG_REPORTING_MODE, &[0x03]), ["Mode: Reserved (0x03)"]);
     }
 
     #[test]
