@@ -25,6 +25,13 @@ pub fn le_event_params(st: &mut IndexState, sub: u8, r: &mut Reader<'_>, out: &m
         le_evt::DATA_LENGTH_CHANGE => data_length_change(st, r, out, false)?,
         le_evt::DATA_LENGTH_CHANGE_V2 => data_length_change(st, r, out, true)?,
         le_evt::TEST_REPORT_HDT_LINK_QUALITY => test_report_hdt_link_quality(r, out)?,
+        le_evt::CIS_UPDATE => cis_update(st, r, out)?,
+        le_evt::UPDATE_CIG_PERIPHERAL_REQUEST => {
+            let cig_id = r.u8()?;
+            field!(out, "CIG ID: 0x{:02x}", cig_id);
+            handle_labelled("CIS Handle", st, r, out)?;
+            u8_field("Config ID", r, out)?;
+        }
         le_evt::READ_LOCAL_P_256_PUBLIC_KEY_COMPLETE => read_local_p256_public_key_complete(r, out)?,
         le_evt::GENERATE_DHKEY_COMPLETE => generate_dhkey_complete(r, out)?,
         le_evt::ENHANCED_CONNECTION_COMPLETE => connection_complete(st, r, out, ConnComplete::EnhancedV1)?,
@@ -934,6 +941,54 @@ fn cis_request(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result
 }
 
 /// LE Create BIG Complete (7.7.65.27).
+/// LE CIS Update (0x3d, 7.7.65.52): a CIG configuration of a CIS was created, modified or removed,
+/// or an update to it started or completed, with the parameters of the CIS from then on.
+fn cis_update(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    status(r, out)?;
+    let h = read_handle(r)?;
+    match st.conn(h) {
+        Some(c) if !c.addr.is_zero() => {
+            field!(out, "Connection handle: {} Address: {} ({})", h, c.addr, addr_type_short(c.addr_type, &c.addr))
+        }
+        _ => field!(out, "Connection handle: {}", h),
+    };
+    u8_field("Config ID", r, out)?;
+    u8_field("Group ID", r, out)?;
+    enum8(
+        "State",
+        r,
+        out,
+        &[
+            (0x00, "Configuration created or modified"),
+            (0x01, "Update initiated"),
+            (0x02, "Update completed"),
+            (0x03, "Configuration removed"),
+        ],
+    )?;
+    u16_field("Update packet sequence number", r, out)?;
+    usec24("CIG synchronization delay", r, out)?;
+    usec24("CIS synchronization delay", r, out)?;
+    usec24("Central to Peripheral latency", r, out)?;
+    usec24("Peripheral to Central latency", r, out)?;
+    let c_phy = le_phy("Central to Peripheral PHY", r, out)?;
+    let p_phy = le_phy("Peripheral to Central PHY", r, out)?;
+    u8_field("Number of subevents", r, out)?;
+    u8_field("Central to Peripheral burst number", r, out)?;
+    u8_field("Peripheral to Central burst number", r, out)?;
+    u8_field("Central to Peripheral flush timeout", r, out)?;
+    u8_field("Peripheral to Central flush timeout", r, out)?;
+    u16_field("Central to Peripheral MTU", r, out)?;
+    u16_field("Peripheral to Central MTU", r, out)?;
+    interval("ISO interval", r, out, 1250)?;
+    usec24("Sub interval", r, out)?;
+    u16_field("Central to Peripheral maximum SDU", r, out)?;
+    u16_field("Peripheral to Central maximum SDU", r, out)?;
+    rates("Central to Peripheral rates", c_phy, r, out)?;
+    rates("Peripheral to Central rates", p_phy, r, out)?;
+    enum8("MIC length", r, out, &[(0x01, "64 bits"), (0x02, "128 bits")])?;
+    Ok(())
+}
+
 /// LE Create BIG Complete v1 (0x1b) and v2 (0x3b, adds the rates, encryption and MIC length).
 fn create_big_complete(st: &mut IndexState, r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     let s = status(r, out)?;
@@ -1617,6 +1672,40 @@ mod tests {
         assert_eq!(child_texts(&nodes[22]), ["HDT 2M", "HDT 6M"]);
         assert_eq!(child_texts(&nodes[23]), ["CODED S=8"]);
         assert_eq!(st.conn(3).unwrap().link, LinkType::Iso);
+    }
+
+    #[test]
+    fn cis_update_events() {
+        let mut data = vec![0x00, 0x05, 0x00, 0x01, 0x03, 0x02, 0x34, 0x12];
+        data.extend_from_slice(&[0x10, 0x27, 0x00, 0x10, 0x27, 0x00, 0x20, 0x4e, 0x00, 0x20, 0x4e, 0x00, 0x05, 0x02]);
+        data.extend_from_slice(&[0x02, 0x01, 0x01, 0x02, 0x02, 0x64, 0x00, 0x64, 0x00, 0x08, 0x00, 0x10, 0x27, 0x00]);
+        data.extend_from_slice(&[0x28, 0x00, 0x28, 0x00, 0x04, 0x00, 0x00, 0x00, 0x02]);
+        let (_, nodes) = run(le_evt::CIS_UPDATE, &data);
+        let lines = texts(&nodes);
+        assert_eq!(
+            lines[..6],
+            [
+                "Status: Success (0x00)",
+                "Connection handle: 5",
+                "Config ID: 1",
+                "Group ID: 3",
+                "State: Update completed (0x02)",
+                "Update packet sequence number: 4660",
+            ]
+        );
+        assert_eq!(lines[10], "Central to Peripheral PHY: LE HDT (0x05)");
+        assert_eq!(
+            lines[lines.len() - 3..],
+            [
+                "Central to Peripheral rates: 0x0004",
+                "Peripheral to Central rates: 0x0000",
+                "MIC length: 128 bits (0x02)",
+            ]
+        );
+        assert_eq!(child_texts(&nodes[lines.len() - 3]), ["HDT 4M"]);
+
+        let (_, nodes) = run(le_evt::UPDATE_CIG_PERIPHERAL_REQUEST, &[0x00, 0x05, 0x00, 0x02]);
+        assert_eq!(texts(&nodes), ["CIG ID: 0x00", "CIS Handle: 5", "Config ID: 2"]);
     }
 
     #[test]

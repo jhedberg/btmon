@@ -25,6 +25,10 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
         cmd::LE_SET_CIG_PARAMETERS_TEST => set_cig_parameters_test(r, out, false)?,
         cmd::LE_SET_CIG_PARAMETERS_TEST_V2 => set_cig_parameters_test(r, out, true)?,
         cmd::LE_CREATE_CIS => create_cis(st, r, out)?,
+        cmd::LE_CREATE_CIS_V2 => {
+            config_id(r, out)?;
+            create_cis(st, r, out)?;
+        }
         cmd::LE_REMOVE_CIG => {
             cig_id(r, out)?;
         }
@@ -47,7 +51,39 @@ pub fn command_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out:
         cmd::LE_BIG_TERMINATE_SYNC => {
             big_handle(r, out)?;
         }
-        cmd::LE_SETUP_ISO_DATA_PATH => setup_iso_data_path(st, r, out)?,
+        cmd::LE_SETUP_ISO_DATA_PATH => setup_iso_data_path(st, r, out, false)?,
+        cmd::LE_SETUP_ISO_DATA_PATH_V2 => setup_iso_data_path(st, r, out, true)?,
+        cmd::LE_SET_DEFAULT_CIS_UPDATE_PARAMETERS => {
+            interval("Update Offset", r, out, 1250)?;
+        }
+        cmd::LE_ADD_CIG_CONFIGURATION => add_cig_configuration(st, r, out, false)?,
+        cmd::LE_ADD_CIG_CONFIGURATION_TEST => add_cig_configuration(st, r, out, true)?,
+        cmd::LE_REMOVE_CIG_CONFIGURATION => {
+            cig_id(r, out)?;
+            config_id(r, out)?;
+        }
+        cmd::LE_UPDATE_CIG | cmd::LE_UPDATE_CIG_TEST => {
+            cig_id(r, out)?;
+            enum8("Role", r, out, &[(0x00, "Central"), (0x01, "Peripheral")])?;
+            handle_labelled("CIS Handle", st, r, out)?;
+            config_id(r, out)?;
+            interval("Update Offset", r, out, 1250)?;
+            if opcode == cmd::LE_UPDATE_CIG_TEST {
+                let t = r.u16()? as i16;
+                field!(out, "Anchor Offset: {} us", t);
+            }
+        }
+        cmd::LE_UPDATE_CIG_PERIPHERAL_REQUEST_REPLY => {
+            cig_id(r, out)?;
+            config_id(r, out)?;
+            handle_labelled("CIS Handle", st, r, out)?;
+            let v = r.u8()?;
+            match v {
+                0x00 => field!(out, "Update Status: Accept (0x00)"),
+                _ => field!(out, "Update Status: Reject (0x{:02x})", v),
+            };
+            interval("Update Offset", r, out, 1250)?;
+        }
         cmd::LE_REMOVE_ISO_DATA_PATH => {
             handle(st, r, out)?;
             mask8("Data Path Direction", r, out, &[(0, "Remove input data path"), (1, "Remove output data path")], 8)?;
@@ -259,6 +295,7 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
         }
         cmd::LE_REJECT_CIS_REQUEST
         | cmd::LE_SETUP_ISO_DATA_PATH
+        | cmd::LE_SETUP_ISO_DATA_PATH_V2
         | cmd::LE_REMOVE_ISO_DATA_PATH
         | cmd::LE_ISO_TRANSMIT_TEST
         | cmd::LE_ISO_RECEIVE_TEST
@@ -345,6 +382,26 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
             u8_field("List size", r, out)?;
         }
         cmd::LE_READ_MINIMUM_SUPPORTED_CONNECTION_INTERVAL => read_min_supported_conn_interval_rsp(r, out)?,
+        cmd::LE_READ_CIS_UPDATE_CAPABILITIES => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            u8_field("Maximum CIG configurations", r, out)?;
+        }
+        cmd::LE_ADD_CIG_CONFIGURATION | cmd::LE_ADD_CIG_CONFIGURATION_TEST | cmd::LE_REMOVE_CIG_CONFIGURATION => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            cig_id(r, out)?;
+            config_id(r, out)?;
+        }
+        cmd::LE_UPDATE_CIG_PERIPHERAL_REQUEST_REPLY => {
+            if status_only(r, out)? {
+                return Ok(true);
+            }
+            cig_id(r, out)?;
+            handle_labelled("CIS Handle", st, r, out)?;
+        }
         cmd::LE_TEST_END_V2 => {
             if status_only(r, out)? {
                 return Ok(true);
@@ -386,6 +443,11 @@ pub fn return_params(st: &mut IndexState, opcode: u16, r: &mut Reader<'_>, out: 
 /// debug key pair is used locally (Enable) or only accepted from the peer (Accept).
 fn eks_debug_mode(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
     enum8("Debug Mode", r, out, &[(0x00, "Disable"), (0x01, "Accept"), (0x02, "Enable")])
+}
+
+/// Config_ID of the CIS parameter update commands of Core 7.0: a configuration of a CIG.
+fn config_id(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
+    u8_field("Config ID", r, out)
 }
 
 fn cig_id(r: &mut Reader<'_>, out: &mut Out) -> Result<u8> {
@@ -464,14 +526,20 @@ fn rate_params(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
 // Isochronous channels
 // ---------------------------------------------------------------------------
 
+/// The coded and HDT rates of each direction of a CIS.
+fn cis_rates(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+    coded_rates("Central to Peripheral Coded Rates", r, out)?;
+    coded_rates("Peripheral to Central Coded Rates", r, out)?;
+    hdt_rates("Central to Peripheral HDT Rates", r, out)?;
+    hdt_rates("Peripheral to Central HDT Rates", r, out)?;
+    Ok(())
+}
+
 /// The LE HDT PHY parameters that v2 of LE Set CIG Parameters (Test) and LE Create BIG (Test) add,
 /// per CIS (`dirs`) or for the BIG.
 fn hdt_iso_params(r: &mut Reader<'_>, out: &mut Out, dirs: bool) -> Result<()> {
     if dirs {
-        coded_rates("Central to Peripheral Coded Rates", r, out)?;
-        coded_rates("Peripheral to Central Coded Rates", r, out)?;
-        hdt_rates("Central to Peripheral HDT Rates", r, out)?;
-        hdt_rates("Peripheral to Central HDT Rates", r, out)?;
+        cis_rates(r, out)?;
     } else {
         coded_rates("Coded Rates", r, out)?;
         hdt_rates("HDT Rates", r, out)?;
@@ -544,6 +612,55 @@ fn set_cig_parameters_test(r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Resul
                 hdt_iso_params(r, o, true)?;
                 u8_field("Central to Peripheral Payload Window size", r, o)?;
                 u8_field("Peripheral to Central Payload Window size", r, o)?;
+            }
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+/// LE Add CIG Configuration (Test) (7.8.165, 7.8.166): a further configuration of a CIG that the
+/// CIS parameter update procedure can switch to, with the parameters of each CIS.
+fn add_cig_configuration(st: &IndexState, r: &mut Reader<'_>, out: &mut Out, test: bool) -> Result<()> {
+    cig_id(r, out)?;
+    config_id(r, out)?;
+    u8_field("Config Group ID", r, out)?;
+    u8_field("Group ID", r, out)?;
+    if test {
+        u8_hex("Central to Peripheral Flush Timeout", r, out)?;
+        u8_hex("Peripheral to Central Flush Timeout", r, out)?;
+        iso_interval(r, out)?;
+        let t = r.u16()?;
+        field!(out, "Anchor Update Buffer Time: {} us", t);
+    } else {
+        ms16("Central to Peripheral Maximum Latency", r, out)?;
+        ms16("Peripheral to Central Maximum Latency", r, out)?;
+    }
+    let n = u8_field("Number of CIS", r, out)?;
+    for _ in 0..n {
+        handle_labelled("CIS Handle", st, r, out)?;
+        out.nest(|o| -> Result<()> {
+            if test {
+                u8_field("Number of Subevents", r, o)?;
+                u16_field("Central to Peripheral Maximum SDU", r, o)?;
+                u16_field("Peripheral to Central Maximum SDU", r, o)?;
+                u16_field("Central to Peripheral Maximum PDU", r, o)?;
+                u16_field("Peripheral to Central Maximum PDU", r, o)?;
+                phy_mask("Central to Peripheral PHY", r, o)?;
+                phy_mask("Peripheral to Central PHY", r, o)?;
+                u8_field("Central to Peripheral Burst Number", r, o)?;
+                u8_field("Peripheral to Central Burst Number", r, o)?;
+                cis_rates(r, o)?;
+                u8_field("Central to Peripheral Payload Window size", r, o)?;
+                u8_field("Peripheral to Central Payload Window size", r, o)?;
+            } else {
+                u16_field("Central to Peripheral Maximum SDU Size", r, o)?;
+                u16_field("Peripheral to Central Maximum SDU Size", r, o)?;
+                phy_mask("Central to Peripheral PHY", r, o)?;
+                phy_mask("Peripheral to Central PHY", r, o)?;
+                u8_hex("Central to Peripheral Retransmission attempts", r, o)?;
+                u8_hex("Peripheral to Central Retransmission attempts", r, o)?;
+                cis_rates(r, o)?;
             }
             Ok(())
         })?;
@@ -624,7 +741,9 @@ fn big_create_sync(r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
     Ok(())
 }
 
-fn setup_iso_data_path(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Result<()> {
+/// LE Setup ISO Data Path v1 and v2; v2 adds the limits of the transport latency and SDU size that
+/// CIS parameter updates keep to during the lifetime of the data path.
+fn setup_iso_data_path(st: &IndexState, r: &mut Reader<'_>, out: &mut Out, v2: bool) -> Result<()> {
     handle(st, r, out)?;
     enum8("Data Path Direction", r, out, &[(0x00, "Input (Host to Controller)"), (0x01, "Output (Controller to Host)")])?;
     let id = r.u8()?;
@@ -635,6 +754,10 @@ fn setup_iso_data_path(st: &IndexState, r: &mut Reader<'_>, out: &mut Out) -> Re
     };
     codec_id(r, out)?;
     usec24("Controller Delay", r, out)?;
+    if v2 {
+        ms16("Maximum Transport Latency Limit", r, out)?;
+        u16_field("Maximum SDU Limit", r, out)?;
+    }
     let len = u8_field("Codec Configuration Length", r, out)? as usize;
     out.hex_field("Codec Configuration", r.bytes(len)?);
     Ok(())
@@ -1877,6 +2000,120 @@ mod tests {
                 "Antenna ID: 2",
                 "TX power: Maximum (0x7f)",
             ]
+        );
+    }
+
+    #[test]
+    fn cis_parameter_update_commands() {
+        let mut st = IndexState::default();
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_CREATE_CIS_V2, &[0x02, 0x01, 0x05, 0x00, 0x40, 0x00]),
+            ["Config ID: 2", "Number of CIS: 1", "CIS Handle: 5", "ACL Handle: 64"]
+        );
+        let data = [
+            0x05, 0x00, 0x01, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x14, 0x00, 0x64, 0x00, 0x00,
+        ];
+        let lines = cmd_lines(&mut st, cmd::LE_SETUP_ISO_DATA_PATH_V2, &data);
+        assert_eq!(
+            lines[6..],
+            [
+                "Controller Delay: 10000 us (0x002710)",
+                "Maximum Transport Latency Limit: 20 ms (0x0014)",
+                "Maximum SDU Limit: 100",
+                "Codec Configuration Length: 0",
+                "Codec Configuration:",
+            ]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_SETUP_ISO_DATA_PATH_V2, &[0x00, 0x05, 0x00]),
+            ["Status: Success (0x00)", "Handle: 5"]
+        );
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_SET_DEFAULT_CIS_UPDATE_PARAMETERS, &[0x08, 0x00]),
+            ["Update Offset: 10.000 msec (0x0008)"]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_READ_CIS_UPDATE_CAPABILITIES, &[0x00, 0x04]),
+            ["Status: Success (0x00)", "Maximum CIG configurations: 4"]
+        );
+
+        // CIG ID, Config ID, Config Group ID, TL Group ID, latencies, CIS count
+        let mut data = vec![0x00, 0x01, 0x00, 0x03, 0x0a, 0x00, 0x14, 0x00, 0x01];
+        // CIS handle, max SDUs, PHYs, RTNs, coded rates, HDT rates
+        data.extend_from_slice(&[0x05, 0x00, 0x28, 0x00, 0x28, 0x00, 0x02, 0x10, 0x02, 0x01]);
+        data.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x08, 0x00]);
+        let lines = cmd_lines(&mut st, cmd::LE_ADD_CIG_CONFIGURATION, &data);
+        assert_eq!(
+            lines[..10],
+            [
+                "CIG ID: 0x00",
+                "Config ID: 1",
+                "Config Group ID: 0",
+                "Group ID: 3",
+                "Central to Peripheral Maximum Latency: 10 ms (0x000a)",
+                "Peripheral to Central Maximum Latency: 20 ms (0x0014)",
+                "Number of CIS: 1",
+                "CIS Handle: 5",
+                "  Central to Peripheral Maximum SDU Size: 40",
+                "  Peripheral to Central Maximum SDU Size: 40",
+            ]
+        );
+        assert_eq!(lines[lines.len() - 2..], ["  Peripheral to Central HDT Rates: 0x0008", "    HDT 6M"]);
+
+        // CIG ID, Config ID, Config Group ID, TL Group ID, FTs, ISO interval, anchor update buffer time, CIS count
+        let mut data = vec![0x00, 0x01, 0x00, 0x03, 0x02, 0x02, 0x08, 0x00, 0x00, 0x00, 0x01];
+        // CIS handle, NSE, max SDUs, max PDUs, PHYs, BNs, coded rates, HDT rates, payload window sizes
+        data.extend_from_slice(&[0x05, 0x00, 0x02, 0x28, 0x00, 0x28, 0x00, 0x28, 0x00, 0x28, 0x00]);
+        data.extend_from_slice(&[0x02, 0x02, 0x01, 0x01]);
+        data.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01]);
+        let lines = cmd_lines(&mut st, cmd::LE_ADD_CIG_CONFIGURATION_TEST, &data);
+        assert_eq!(
+            lines[4..8],
+            [
+                "Central to Peripheral Flush Timeout: 0x02",
+                "Peripheral to Central Flush Timeout: 0x02",
+                "ISO Interval: 10.000 msec (0x0008)",
+                "Anchor Update Buffer Time: 0 us",
+            ]
+        );
+        assert_eq!(lines[lines.len() - 1], "  Peripheral to Central Payload Window size: 1");
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_ADD_CIG_CONFIGURATION_TEST, &[0x00, 0x00, 0x01]),
+            ["Status: Success (0x00)", "CIG ID: 0x00", "Config ID: 1"]
+        );
+
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_REMOVE_CIG_CONFIGURATION, &[0x00, 0x01]),
+            ["CIG ID: 0x00", "Config ID: 1"]
+        );
+        assert_eq!(
+            cmd_lines(&mut st, cmd::LE_UPDATE_CIG_TEST, &[0x00, 0x01, 0x05, 0x00, 0x01, 0x10, 0x00, 0x9c, 0xff]),
+            [
+                "CIG ID: 0x00",
+                "Role: Peripheral (0x01)",
+                "CIS Handle: 5",
+                "Config ID: 1",
+                "Update Offset: 20.000 msec (0x0010)",
+                "Anchor Offset: -100 us",
+            ]
+        );
+        assert_eq!(
+            cmd_lines(
+                &mut st,
+                cmd::LE_UPDATE_CIG_PERIPHERAL_REQUEST_REPLY,
+                &[0x00, 0x01, 0x05, 0x00, 0x0d, 0x10, 0x00]
+            ),
+            [
+                "CIG ID: 0x00",
+                "Config ID: 1",
+                "CIS Handle: 5",
+                "Update Status: Reject (0x0d)",
+                "Update Offset: 20.000 msec (0x0010)",
+            ]
+        );
+        assert_eq!(
+            rsp_lines(&mut st, cmd::LE_UPDATE_CIG_PERIPHERAL_REQUEST_REPLY, &[0x00, 0x00, 0x05, 0x00]),
+            ["Status: Success (0x00)", "CIG ID: 0x00", "CIS Handle: 5"]
         );
     }
 
