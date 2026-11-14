@@ -380,6 +380,8 @@ pub mod cmd {
     pub const LE_SET_EVENT_MASK_V2: u16 = 0x20a4;
     pub const LE_CS_READ_LOCAL_SUPPORTED_CAPABILITIES_V2: u16 = 0x20a5;
     pub const LE_CS_WRITE_CACHED_REMOTE_SUPPORTED_CAPABILITIES_V2: u16 = 0x20a6;
+    pub const LE_CS_SET_SECURITY_REQUIREMENTS: u16 = 0x20a7;
+    pub const CS_SET_DEFAULT_SECURITY_REQUIREMENTS: u16 = 0x20a8;
 }
 
 /// All known HCI commands as `(opcode, name)`, sorted by opcode.
@@ -759,6 +761,8 @@ pub static COMMANDS: &[(u16, &str)] = &[
     (0x20a4, "LE Set Event Mask v2"),
     (0x20a5, "LE CS Read Local Supported Capabilities v2"),
     (0x20a6, "LE CS Write Cached Remote Supported Capabilities v2"),
+    (0x20a7, "LE CS Set Security Requirements"),
+    (0x20a8, "CS Set Default Security Requirements"),
 ];
 
 /// HCI event codes.

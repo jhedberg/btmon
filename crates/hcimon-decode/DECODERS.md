@@ -127,6 +127,15 @@ discovery responses.
 * `tools/hci_ref_v6.3.txt` — every HCI command/event of Core Spec v6.3 with
   its opcode and the ordered list of parameters with sizes.  Search it for the
   section (e.g. `## 7.8.53 LE Set Extended Advertising Parameters command`).
+  A command or event with several versions lists the opcode or code of each
+  (`HCI_LE_Data_Length_Change[v2]=0x3E/0x39`, event code and subevent code),
+  the parameters of each version under `Versions:`, and the values the
+  Controller uses for parameters an older version does not carry under
+  `Missing parameters:`.  The parameter blocks describe the latest version.
+* `tools/gen_hci_ref.py` makes that file from `pdftotext -layout` output of the
+  Core Specification PDF, and `tools/gen_hci_ids.py` makes `ids.rs` from it;
+  for a new specification version, run both and review the diff of the
+  reference against the previous one.
 * The full text of the specification is needed for the meaning of values
   (allowed ranges, enumerations).  It is not part of the repository.
 * BlueZ's `monitor/packet.c` defines the de-facto output format; do not copy

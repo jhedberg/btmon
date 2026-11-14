@@ -148,7 +148,7 @@
     Retransmission_Effort: 1 octet
     Packet_Type: 2 octets
   Return parameters:
-## 7.1.27 Accept Synchronous Connection Request command  [HCI_Accept_-=0x0029]
+## 7.1.27 Accept Synchronous Connection Request command  [HCI_Accept_Synchronous_Connection_Request=0x0029]
   Command parameters:
     BD_ADDR: 6 octets
     Transmit_Bandwidth: 4 octets
@@ -158,7 +158,7 @@
     Retransmission_Effort: 1 octet
     Packet_Type: 2 octets
   Return parameters:
-## 7.1.28 Reject Synchronous Connection Request command  [HCI_Reject_-=0x002A]
+## 7.1.28 Reject Synchronous Connection Request command  [HCI_Reject_Synchronous_Connection_Request=0x002A]
   Command parameters:
     BD_ADDR: 6 octets
     Reason: 1 octet
@@ -178,7 +178,7 @@
   Return parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
-## 7.1.31 User Confirmation Request Negative Reply command  [HCI_User_Confirmation_Request_-=0x002D]
+## 7.1.31 User Confirmation Request Negative Reply command  [HCI_User_Confirmation_Request_Negative_Reply=0x002D]
   Command parameters:
     BD_ADDR: 6 octets
   Return parameters:
@@ -191,7 +191,7 @@
   Return parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
-## 7.1.33 User Passkey Request Negative Reply command  [HCI_User_Passkey_Request_Negative_-=0x002F]
+## 7.1.33 User Passkey Request Negative Reply command  [HCI_User_Passkey_Request_Negative_Reply=0x002F]
   Command parameters:
     BD_ADDR: 6 octets
   Return parameters:
@@ -205,20 +205,20 @@
   Return parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
-## 7.1.35 Remote OOB Data Request Negative Reply command  [HCI_Remote_-=0x0033]
+## 7.1.35 Remote OOB Data Request Negative Reply command  [HCI_Remote_OOB_Data_Request_Negative_Reply=0x0033]
   Command parameters:
     BD_ADDR: 6 octets
   Return parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
-## 7.1.36 IO Capability Request Negative Reply command  [HCI_IO_Capability_Request_Negative_-=0x0034]
+## 7.1.36 IO Capability Request Negative Reply command  [HCI_IO_Capability_Request_Negative_Reply=0x0034]
   Command parameters:
     BD_ADDR: 6 octets
     Reason: 1 octet
   Return parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
-## 7.1.45 Enhanced Setup Synchronous Connection command  [HCI_Enhanced_-=0x003D]
+## 7.1.45 Enhanced Setup Synchronous Connection command  [HCI_Enhanced_Setup_Synchronous_Connection=0x003D]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Transmit_Bandwidth: 4 octets
@@ -245,7 +245,7 @@
     Packet_Type: 2 octets
     Retransmission_Effort: 1 octet
   Return parameters:
-## 7.1.46 Enhanced Accept Synchronous Connection Request command  [HCI_Enhanced_-=0x003E]
+## 7.1.46 Enhanced Accept Synchronous Connection Request command  [HCI_Enhanced_Accept_Synchronous_Connection_Request=0x003E]
   Command parameters:
     BD_ADDR: 6 octets
     Transmit_Bandwidth: 4 octets
@@ -284,7 +284,7 @@
   Return parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
-## 7.1.49 Set Connectionless Peripheral Broadcast command  [HCI_Set_Connectionless_Peripheral_-=0x0041]
+## 7.1.49 Set Connectionless Peripheral Broadcast command  [HCI_Set_Connectionless_Peripheral_Broadcast=0x0041]
   Command parameters:
     Enable: 1 octet
     LT_ADDR: 1 octet
@@ -297,7 +297,7 @@
     Status: 1 octet
     LT_ADDR: 1 octet
     Interval: 2 octets
-## 7.1.50 Set Connectionless Peripheral Broadcast Receive command  [HCI_Set_-=0x0042]
+## 7.1.50 Set Connectionless Peripheral Broadcast Receive command  [HCI_Set_Connectionless_Peripheral_Broadcast_Receive=0x0042]
   Command parameters:
     Enable: 1 octet
     BD_ADDR: 6 octets
@@ -324,7 +324,7 @@
     Sync_Scan_Window: 2 octets
     Sync_Scan_Interval: 2 octets
   Return parameters:
-## 7.1.53 Remote OOB Extended Data Request Reply command  [HCI_Remote_-=0x0045]
+## 7.1.53 Remote OOB Extended Data Request Reply command  [HCI_Remote_OOB_Extended_Data_Request_Reply=0x0045]
   Command parameters:
     BD_ADDR: 6 octets
     C_192: 16 octets
@@ -388,12 +388,12 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.2.11 Read Default Link Policy Settings command  [HCI_Read_Default_Link_Policy_-=0x000E]
+## 7.2.11 Read Default Link Policy Settings command  [HCI_Read_Default_Link_Policy_Settings=0x000E]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Default_Link_Policy_Settings: 2 octets
-## 7.2.12 Write Default Link Policy Settings command  [HCI_Write_Default_Link_Policy_-=0x000F]
+## 7.2.12 Write Default Link Policy Settings command  [HCI_Write_Default_Link_Policy_Settings=0x000F]
   Command parameters:
     Default_Link_Policy_Settings: 2 octets
   Return parameters:
@@ -498,12 +498,12 @@
   Return parameters:
     Status: 1 octet
     Local_Name: 248 octets
-## 7.3.13 Read Connection Accept Timeout command  [HCI_Read_Connection_Accept_-=0x0015]
+## 7.3.13 Read Connection Accept Timeout command  [HCI_Read_Connection_Accept_Timeout=0x0015]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Connection_Accept_Timeout: 2 octets
-## 7.3.14 Write Connection Accept Timeout command  [HCI_Write_Connection_Accept_-=0x0016]
+## 7.3.14 Write Connection Accept Timeout command  [HCI_Write_Connection_Accept_Timeout=0x0016]
   Command parameters:
     Connection_Accept_Timeout: 2 octets
   Return parameters:
@@ -596,12 +596,12 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.3.31 Read Num Broadcast Retransmissions command  [HCI_Read_Num_Broadcast_-=0x0029]
+## 7.3.31 Read Num Broadcast Retransmissions command  [HCI_Read_Num_Broadcast_Retransmissions=0x0029]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Num_Broadcast_Retransmissions: 1 octet
-## 7.3.32 Write Num Broadcast Retransmissions command  [HCI_Write_Num_Broadcast_-=0x002A]
+## 7.3.32 Write Num Broadcast Retransmissions command  [HCI_Write_Num_Broadcast_Retransmissions=0x002A]
   Command parameters:
     Num_Broadcast_Retransmissions: 1 octet
   Return parameters:
@@ -624,22 +624,22 @@
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     TX_Power_Level: 1 octet
-## 7.3.36 Read Synchronous Flow Control Enable command  [HCI_Read_Synchronous_-=0x002E]
+## 7.3.36 Read Synchronous Flow Control Enable command  [HCI_Read_Synchronous_Flow_Control_Enable=0x002E]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Synchronous_Flow_Control_Enable: 1 octet
-## 7.3.37 Write Synchronous Flow Control Enable command  [HCI_Write_Synchronous_-=0x002F]
+## 7.3.37 Write Synchronous Flow Control Enable command  [HCI_Write_Synchronous_Flow_Control_Enable=0x002F]
   Command parameters:
     Synchronous_Flow_Control_Enable: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.38 Set Controller To Host Flow Control command  [HCI_Set_Controller_To_Host_Flow_-=0x0031]
+## 7.3.38 Set Controller To Host Flow Control command  [HCI_Set_Controller_To_Host_Flow_Control=0x0031]
   Command parameters:
     Flow_Control_Enable: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.39 Host Buffer Size command  [HCI_Host_Buffer_-=0x0033]
+## 7.3.39 Host Buffer Size command  [HCI_Host_Buffer_Size=0x0033]
   Command parameters:
     Host_ACL_Data_Packet_Length: 2 octets
     Host_Synchronous_Data_Packet_Length: 1 octet
@@ -647,13 +647,13 @@
     Host_Total_Num_Synchronous_Data_Packets: 2 octets
   Return parameters:
     Status: 1 octet
-## 7.3.40 Host Number Of Completed Packets command  [HCI_Host_Number_Of_-=0x0035]
+## 7.3.40 Host Number Of Completed Packets command  [HCI_Host_Number_Of_Completed_Packets=0x0035]
   Command parameters:
     Num_Handles: 1 octet
     Connection_Handle[i]: Num_Handles × 2 octets (12 bits meaningful)
     Host_Num_Completed_Packets[i]: Num_Handles × 2 octets
   Return parameters:
-## 7.3.41 Read Link Supervision Timeout command  [HCI_Read_Link_Supervision_-=0x0036]
+## 7.3.41 Read Link Supervision Timeout command  [HCI_Read_Link_Supervision_Timeout=0x0036]
   Command parameters:
     Handle: 2 octets (12 bits meaningful)
   Return parameters:
@@ -684,7 +684,7 @@
     IAC_LAP[i]: Num_Current_IAC × 3 octets
   Return parameters:
     Status: 1 octet
-## 7.3.46 Set AFH Host Channel Classification command  [HCI_Set_AFH_Host_Channel_-=0x003F]
+## 7.3.46 Set AFH Host Channel Classification command  [HCI_Set_AFH_Host_Channel_Classification=0x003F]
   Command parameters:
     AFH_Host_Channel_Classification: 10 octets (79 bits meaningful)
   Return parameters:
@@ -719,23 +719,23 @@
     Page_Scan_Type: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.53 Read AFH Channel Assessment Mode command  [HCI_Read_AFH_Channel_-=0x0048]
+## 7.3.53 Read AFH Channel Assessment Mode command  [HCI_Read_AFH_Channel_Assessment_Mode=0x0048]
   Command parameters:
   Return parameters:
     Status: 1 octet
     AFH_Channel_Assessment_Mode: 1 octet
-## 7.3.54 Write AFH Channel Assessment Mode command  [HCI_Write_AFH_Channel_-=0x0049]
+## 7.3.54 Write AFH Channel Assessment Mode command  [HCI_Write_AFH_Channel_Assessment_Mode=0x0049]
   Command parameters:
     AFH_Channel_Assessment_Mode: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.55 Read Extended Inquiry Response command  [HCI_Read_Extended_Inquiry_-=0x0051]
+## 7.3.55 Read Extended Inquiry Response command  [HCI_Read_Extended_Inquiry_Response=0x0051]
   Command parameters:
   Return parameters:
     Status: 1 octet
     FEC_Required: 1 octet
     Extended_Inquiry_Response: 240 octets
-## 7.3.56 Write Extended Inquiry Response command  [HCI_Write_Extended_Inquiry_-=0x0052]
+## 7.3.56 Write Extended Inquiry Response command  [HCI_Write_Extended_Inquiry_Response=0x0052]
   Command parameters:
     FEC_Required: 1 octet
     Extended_Inquiry_Response: 240 octets
@@ -761,7 +761,7 @@
     Status: 1 octet
     C: 16 octets
     R: 16 octets
-## 7.3.61 Read Inquiry Response Transmit Power Level command  [HCI_Read_Inquiry_Response_Transmit_-=0x0058]
+## 7.3.61 Read Inquiry Response Transmit Power Level command  [HCI_Read_Inquiry_Response_Transmit_Power_Level=0x0058]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -777,12 +777,12 @@
   Return parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
-## 7.3.64 Read Default Erroneous Data Reporting command  [HCI_Read_Default_Erroneous_-=0x005A]
+## 7.3.64 Read Default Erroneous Data Reporting command  [HCI_Read_Default_Erroneous_Data_Reporting=0x005A]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Erroneous_Data_Reporting: 1 octet
-## 7.3.65 Write Default Erroneous Data Reporting command  [HCI_Write_Default_Erroneous_Data_-=0x005B]
+## 7.3.65 Write Default Erroneous Data Reporting command  [HCI_Write_Default_Erroneous_Data_Reporting=0x005B]
   Command parameters:
     Erroneous_Data_Reporting: 1 octet
   Return parameters:
@@ -807,7 +807,7 @@
     Flow_Control_Mode: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.74 Read Enhanced Transmit Power Level command  [HCI_Read_Enhanced_Transmit_-=0x0068]
+## 7.3.74 Read Enhanced Transmit Power Level command  [HCI_Read_Enhanced_Transmit_Power_Level=0x0068]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Type: 1 octet
@@ -829,7 +829,7 @@
     Unused: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.80 Set MWS Channel Parameters command  [HCI_Set_MWS_Channel_-=0x006E]
+## 7.3.80 Set MWS Channel Parameters command  [HCI_Set_MWS_Channel_Parameters=0x006E]
   Command parameters:
     MWS_Channel_Enable: 1 octet
     MWS_RX_Center_Frequency: 2 octets
@@ -839,7 +839,7 @@
     MWS_Channel_Type: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.81 Set External Frame Configuration command  [HCI_Set_External_Frame_-=0x006F]
+## 7.3.81 Set External Frame Configuration command  [HCI_Set_External_Frame_Configuration=0x006F]
   Command parameters:
     MWS_Frame_Duration: 2 octets
     MWS_Frame_Sync_Assert_Offset: 2 octets
@@ -849,7 +849,7 @@
     Period_Type[i]: MWS_Num_Periods × 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.82 Set MWS Signaling command  [HCI_Set_-=0x0070]
+## 7.3.82 Set MWS Signaling command  [HCI_Set_MWS_Signaling=0x0070]
   Command parameters:
     MWS_RX_Assert_Offset: 2 octets
     MWS_RX_Assert_Jitter: 2 octets
@@ -898,7 +898,7 @@
     Scan_Frequency_High[i]: Num_Scan_Frequencies × 2 octets
   Return parameters:
     Status: 1 octet
-## 7.3.85 Set MWS_PATTERN Configuration command  [HCI_Set_MWS_PATTERN_-=0x0073]
+## 7.3.85 Set MWS_PATTERN Configuration command  [HCI_Set_MWS_PATTERN_Configuration=0x0073]
   Command parameters:
     MWS_Pattern_Index: 1 octet
     MWS_Pattern_Num_Intervals: 1 octet
@@ -918,7 +918,7 @@
   Return parameters:
     Status: 1 octet
     LT_ADDR: 1 octet
-## 7.3.88 Set Connectionless Peripheral Broadcast Data command  [HCI_Set_Connectionless_Peripheral_-=0x0076]
+## 7.3.88 Set Connectionless Peripheral Broadcast Data command  [HCI_Set_Connectionless_Peripheral_Broadcast_Data=0x0076]
   Command parameters:
     LT_ADDR: 1 octet
     Fragment: 1 octet
@@ -927,14 +927,14 @@
   Return parameters:
     Status: 1 octet
     LT_ADDR: 1 octet
-## 7.3.89 Read Synchronization Train Parameters command  [HCI_Read_Synchronization_Train_-=0x0077]
+## 7.3.89 Read Synchronization Train Parameters command  [HCI_Read_Synchronization_Train_Parameters=0x0077]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Sync_Train_Interval: 2 octets
     Sync_Train_Timeout: 4 octets
     Service_Data: 1 octet
-## 7.3.90 Write Synchronization Train Parameters command  [HCI_Write_Synchronization_Train_-=0x0078]
+## 7.3.90 Write Synchronization Train Parameters command  [HCI_Write_Synchronization_Train_Parameters=0x0078]
   Command parameters:
     Interval_Min: 2 octets
     Interval_Max: 2 octets
@@ -943,24 +943,24 @@
   Return parameters:
     Status: 1 octet
     Sync_Train_Interval: 2 octets
-## 7.3.91 Read Secure Connections Host Support command  [HCI_Read_Secure_-=0x0079]
+## 7.3.91 Read Secure Connections Host Support command  [HCI_Read_Secure_Connections_Host_Support=0x0079]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Secure_Connections_Host_Support: 1 octet
-## 7.3.92 Write Secure Connections Host Support command  [HCI_Write_Secure_-=0x007A]
+## 7.3.92 Write Secure Connections Host Support command  [HCI_Write_Secure_Connections_Host_Support=0x007A]
   Command parameters:
     Secure_Connections_Host_Support: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.3.93 Read Authenticated Payload Timeout command  [HCI_Read_Authenticated_-=0x007B]
+## 7.3.93 Read Authenticated Payload Timeout command  [HCI_Read_Authenticated_Payload_Timeout=0x007B]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Authenticated_Payload_Timeout: 2 octets
-## 7.3.94 Write Authenticated Payload Timeout command  [HCI_Write_Authenticated_-=0x007C]
+## 7.3.94 Write Authenticated Payload Timeout command  [HCI_Write_Authenticated_Payload_Timeout=0x007C]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Authenticated_Payload_Timeout: 2 octets
@@ -985,7 +985,7 @@
     Extended_Page_Timeout: 2 octets
   Return parameters:
     Status: 1 octet
-## 7.3.98 Read Extended Inquiry Length command  [HCI_Read_Extended_Inquiry_-=0x0080]
+## 7.3.98 Read Extended Inquiry Length command  [HCI_Read_Extended_Inquiry_Length=0x0080]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -1022,16 +1022,21 @@
     LMP_Version: 1 octet
     Company_Identifier: 2 octets
     LMP_Subversion: 2 octets
-## 7.4.2 Read Local Supported Commands command  [HCI_Read_Local_Supported_Commands=0x0010 ; HCI_Read_Local_Supported_Commands=0x0002]
+## 7.4.2 Read Local Supported Commands command  [HCI_Read_Local_Supported_Commands[v2]=0x0010 ; HCI_Read_Local_Supported_Commands[v1]=0x0002]
+  Versions:
+    HCI_Read_Local_Supported_Commands[v2]: none -> Status, Supported_Commands
+    HCI_Read_Local_Supported_Commands[v1]: none -> Status, Supported_Commands
   Command parameters:
   Return parameters:
     Status: 1 octet
+    Supported_Commands[v1]: 64 octets
+    Supported_Commands[v2]: 251 octets
 ## 7.4.3 Read Local Supported Features command  [HCI_Read_Local_Supported_Features=0x0003]
   Command parameters:
   Return parameters:
     Status: 1 octet
     LMP_Features: 8 octets
-## 7.4.4 Read Local Extended Features command  [HCI_Read_Local_Extended_-=0x0004]
+## 7.4.4 Read Local Extended Features command  [HCI_Read_Local_Extended_Features=0x0004]
   Command parameters:
     Page_Number: 1 octet
   Return parameters:
@@ -1059,7 +1064,10 @@
     Max_ACL_Data_Packet_Length: 2 octets
     Data_Block_Length: 2 octets
     Total_Num_Data_Blocks: 2 octets
-## 7.4.8 Read Local Supported Codecs command  [HCI_Read_Local_-=0x000D ; HCI_Read_Local_-=0x000B]
+## 7.4.8 Read Local Supported Codecs command  [HCI_Read_Local_Supported_Codecs[v2]=0x000D ; HCI_Read_Local_Supported_Codecs[v1]=0x000B]
+  Versions:
+    HCI_Read_Local_Supported_Codecs[v2]: none -> Status, Num_Supported_Standard_Codecs, Standard_Codec_ID[i], Standard_Codec_Transport[i], Num_Supported_Vendor_Specific_Codecs, Vendor_Specific_Codec_ID[k], Vendor_Specific_Codec_Transport[k]
+    HCI_Read_Local_Supported_Codecs[v1]: none -> Status, Num_Supported_Standard_Codecs, Standard_Codec_ID[i], Num_Supported_Vendor_Specific_Codecs, Vendor_Specific_Codec_ID[k]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -1069,13 +1077,13 @@
     Num_Supported_Vendor_Specific_Codecs: 1 octet
     Vendor_Specific_Codec_ID[k]: Num_Supported_Vendor_Specific_Codecs × 4
     Vendor_Specific_Codec_Transport[k]: Num_Supported_Vendor_Specific_Codecs
-## 7.4.9 Read Local Simple Pairing Options command  [HCI_Read_Local_Simple_Pairing_-=0x000C]
+## 7.4.9 Read Local Simple Pairing Options command  [HCI_Read_Local_Simple_Pairing_Options=0x000C]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Simple_Pairing_Options: 1 octet
     Max_Encryption_Key_Size: 1 octet
-## 7.4.10 Read Local Supported Codec Capabilities command  [HCI_Read_Local_Supported_-=0x000E]
+## 7.4.10 Read Local Supported Codec Capabilities command  [HCI_Read_Local_Supported_Codec_Capabilities=0x000E]
   Command parameters:
     Codec_ID: 5 octets
     Logical_Transport_Type: 1 octet
@@ -1085,7 +1093,7 @@
     Num_Codec_Capabilities: 1 octet
     Codec_Capability_Length[i]: Num_Codec_Capabilities × 1 octet
     Codec_Capability[i]: SUM(Codec_Capability_Length[i]) octets
-## 7.4.11 Read Local Supported Controller Delay command  [HCI_Read_Local_Supported_-=0x000F]
+## 7.4.11 Read Local Supported Controller Delay command  [HCI_Read_Local_Supported_Controller_Delay=0x000F]
   Command parameters:
     Codec_ID: 5 octets
     Logical_Transport_Type: 1 octet
@@ -1146,7 +1154,7 @@
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Key_Size: 1 octet
-## 7.5.11 Get MWS Transport Layer Configuration command  [HCI_Get_MWS_Transport_Layer_-=0x000C]
+## 7.5.11 Get MWS Transport Layer Configuration command  [HCI_Get_MWS_Transport_Layer_Configuration=0x000C]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -1155,7 +1163,7 @@
     Num_Baud_Rates[i]: Num_Transports × 1 octet
     To_MWS_Baud_Rate[k]: SUM (Num_Baud_Rates [i])× 4 octets
     From_MWS_Baud_Rate[k]: SUM (Num_Baud_Rates[i]) × 4 octets
-## 7.5.12 Set Triggered Clock Capture command  [HCI_Set_Triggered_Clock_-=0x000D]
+## 7.5.12 Set Triggered Clock Capture command  [HCI_Set_Triggered_Clock_Capture=0x000D]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Enable: 1 octet
@@ -1174,16 +1182,16 @@
     Loopback_Mode: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.6.3 Enable Implementation Under Test Mode command  [HCI_Enable_-=0x0003]
+## 7.6.3 Enable Implementation Under Test Mode command  [HCI_Enable_Implementation_Under_Test_Mode=0x0003]
   Command parameters:
   Return parameters:
     Status: 1 octet
-## 7.6.4 Write Simple Pairing Debug Mode command  [HCI_Write_Simple_Pairing_Debug_-=0x0004]
+## 7.6.4 Write Simple Pairing Debug Mode command  [HCI_Write_Simple_Pairing_Debug_Mode=0x0004]
   Command parameters:
     Simple_Pairing_Debug_Mode: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.6.8 Write Secure Connections Test Mode command  [HCI_Write_Secure_Connections_Test_-=0x000A]
+## 7.6.8 Write Secure Connections Test Mode command  [HCI_Write_Secure_Connections_Test_Mode=0x000A]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     eSCO_Loopback_Mode: 1 octet
@@ -1228,6 +1236,9 @@
     BD_ADDR: 6 octets
     Remote_Name: 248 octets
 ## 7.7.8 Encryption Change event  [HCI_Encryption_Change[v2]=0x59 ; HCI_Encryption_Change[v1]=0x08]
+  Versions:
+    HCI_Encryption_Change[v2]: Status, Connection_Handle, Encryption_Enabled, Encryption_Key_Size
+    HCI_Encryption_Change[v1]: Status, Connection_Handle, Encryption_Enabled
   Event parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
@@ -1457,7 +1468,7 @@
     Num_Completed_Packets[i]: Num_Handles × 2 octets
     Num_Completed_Blocks[i]: Num_Handles × 2 octets
 ## 7.7.65 LE Meta event  []
-## 7.7.65.1 LE Connection Complete event  [HCI_LE_Connection_Complete=0x3E] subevent=0x01
+## 7.7.65.1 LE Connection Complete event  [HCI_LE_Connection_Complete=0x3E/0x01]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1469,7 +1480,7 @@
     Peripheral_Latency: 2 octets
     Supervision_Timeout: 2 octets
     Central_Clock_Accuracy: 1 octet
-## 7.7.65.2 LE Advertising Report event  [HCI_LE_Advertising_Report=0x3E] subevent=0x02
+## 7.7.65.2 LE Advertising Report event  [HCI_LE_Advertising_Report=0x3E/0x02]
   Event parameters:
     Subevent_Code: 1 octet
     Num_Reports: 1 octet
@@ -1479,7 +1490,7 @@
     Data_Length[i]: Num_Reports × 1 octet
     Data[i]: SUM (Data_Length[i]) octets
     RSSI[i]: Num_Reports × 1 octet
-## 7.7.65.3 LE Connection Update Complete event  [HCI_LE_Connection_Update_Complete=0x3E] subevent=0x03
+## 7.7.65.3 LE Connection Update Complete event  [HCI_LE_Connection_Update_Complete=0x3E/0x03]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1487,19 +1498,19 @@
     Connection_Interval: 2 octets
     Peripheral_Latency: 2 octets
     Supervision_Timeout: 2 octets
-## 7.7.65.4 LE Read Remote Features Page 0 Complete event  [HCI_LE_Read_Remote_Features_Page_0_Complete=0x3E] subevent=0x04
+## 7.7.65.4 LE Read Remote Features Page 0 Complete event  [HCI_LE_Read_Remote_Features_Page_0_Complete=0x3E/0x04]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     LE_Features: 8 octets
-## 7.7.65.5 LE Long Term Key Request event  [HCI_LE_Long_Term_Key_Request=0x3E] subevent=0x05
+## 7.7.65.5 LE Long Term Key Request event  [HCI_LE_Long_Term_Key_Request=0x3E/0x05]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Random_Number: 8 octets
     Encrypted_Diversifier: 2 octets
-## 7.7.65.6 LE Remote Connection Parameter Request event  [HCI_LE_Remote_Connection_Parameter_Request=0x3E] subevent=0x06
+## 7.7.65.6 LE Remote Connection Parameter Request event  [HCI_LE_Remote_Connection_Parameter_Request=0x3E/0x06]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
@@ -1507,7 +1518,7 @@
     Interval_Max: 2 octets
     Max_Latency: 2 octets
     Timeout: 2 octets
-## 7.7.65.7 LE Data Length Change event  [HCI_LE_Data_Length_Change=0x3E] subevent=0x07
+## 7.7.65.7 LE Data Length Change event  [HCI_LE_Data_Length_Change=0x3E/0x07]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
@@ -1515,18 +1526,21 @@
     Max_TX_Time: 2 octets
     Max_RX_Octets: 2 octets
     Max_RX_Time: 2 octets
-## 7.7.65.8 LE Read Local P-256 Public Key Complete event  [] subevent=0x08
+## 7.7.65.8 LE Read Local P-256 Public Key Complete event  [HCI_LE_Read_Local_P-256_Public_Key_Complete=0x3E/0x08]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Key_X_Coordinate: 32 octets
     Key_Y_Coordinate: 32 octets
-## 7.7.65.9 LE Generate DHKey Complete event  [HCI_LE_Generate_DHKey_Complete=0x3E] subevent=0x09
+## 7.7.65.9 LE Generate DHKey Complete event  [HCI_LE_Generate_DHKey_Complete=0x3E/0x09]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     DH_Key: 32 octets
-## 7.7.65.10 LE Enhanced Connection Complete event  [HCI_LE_Enhanced_Connection_Complete[v2]=0x3E ; HCI_LE_Enhanced_Connection_Complete[v1]=0x3E] subevent=0x0A
+## 7.7.65.10 LE Enhanced Connection Complete event  [HCI_LE_Enhanced_Connection_Complete[v2]=0x3E/0x29 ; HCI_LE_Enhanced_Connection_Complete[v1]=0x3E/0x0A]
+  Versions:
+    HCI_LE_Enhanced_Connection_Complete[v2]: Subevent_Code, Status, Connection_Handle, Role, Peer_Address_Type, Peer_Address, Local_Resolvable_Private_Address, Peer_Resolvable_Private_Address, Connection_Interval, Peripheral_Latency, Supervision_Timeout, Central_Clock_Accuracy, Advertising_Handle, Sync_Handle
+    HCI_LE_Enhanced_Connection_Complete[v1]: Subevent_Code, Status, Connection_Handle, Role, Peer_Address_Type, Peer_Address, Local_Resolvable_Private_Address, Peer_Resolvable_Private_Address Connection_Interval, Peripheral_Latency, Supervision_Timeout, Central_Clock_Accuracy
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1542,7 +1556,7 @@
     Central_Clock_Accuracy: 1 octet
     Advertising_Handle: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
-## 7.7.65.11 LE Directed Advertising Report event  [HCI_LE_Directed_Advertising_Report=0x3E] subevent=0x0B
+## 7.7.65.11 LE Directed Advertising Report event  [HCI_LE_Directed_Advertising_Report=0x3E/0x0B]
   Event parameters:
     Subevent_Code: 1 octet
     Num_Reports: 1 octet
@@ -1552,14 +1566,14 @@
     Direct_Address_Type[i]: Num_Reports × 1 octet
     Direct_Address[i]: Num_Reports × 6 octets
     RSSI[i]: Num_Reports × 1 octet
-## 7.7.65.12 LE PHY Update Complete event  [HCI_LE_PHY_Update_Complete=0x3E] subevent=0x0C
+## 7.7.65.12 LE PHY Update Complete event  [HCI_LE_PHY_Update_Complete=0x3E/0x0C]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     TX_PHY: 1 octet
     RX_PHY: 1 octet
-## 7.7.65.13 LE Extended Advertising Report event  [HCI_LE_Extended_Advertising_Report=0x3E] subevent=0x0D
+## 7.7.65.13 LE Extended Advertising Report event  [HCI_LE_Extended_Advertising_Report=0x3E/0x0D]
   Event parameters:
     Subevent_Code: 1 octet
     Num_Reports: 1 octet
@@ -1576,7 +1590,10 @@
     Direct_Address[i]: Num_Reports × 6 octets
     Data_Length[i]: Num_Reports × 1 octet
     Data[i]: SUM (Data_Length[i]) octets
-## 7.7.65.14 LE Periodic Advertising Sync Established event  [HCI_LE_Periodic_Advertising_Sync_Established[v2]=0x3E ; HCI_LE_Periodic_Advertising_Sync_Established[v1]=0x3E] subevent=0x0E
+## 7.7.65.14 LE Periodic Advertising Sync Established event  [HCI_LE_Periodic_Advertising_Sync_Established[v2]=0x3E/0x24 ; HCI_LE_Periodic_Advertising_Sync_Established[v1]=0x3E/0x0E]
+  Versions:
+    HCI_LE_Periodic_Advertising_Sync_Established[v2]: Subevent_Code, Status, Sync_Handle, Advertising_SID, Advertiser_Address_Type, Advertiser_Address, Advertiser_PHY, Periodic_Advertising_Interval, Advertiser_Clock_Accuracy, Num_Subevents, Subevent_Interval, Response_Slot_Delay, Response_Slot_Spacing
+    HCI_LE_Periodic_Advertising_Sync_Established[v1]: Subevent_Code, Status, Sync_Handle, Advertising_SID, Advertiser_Address_Type, Advertiser_Address, Advertiser_PHY, Periodic_Advertising_Interval, Advertiser_Clock_Accuracy
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1591,7 +1608,10 @@
     Subevent_Interval: 1 octet
     Response_Slot_Delay: 1 octet
     Response_Slot_Spacing: 1 octet
-## 7.7.65.15 LE Periodic Advertising Report event  [HCI_LE_Periodic_Advertising_Report[v2]=0x3E ; HCI_LE_Periodic_Advertising_Report[v1]=0x3E] subevent=0x0F
+## 7.7.65.15 LE Periodic Advertising Report event  [HCI_LE_Periodic_Advertising_Report[v2]=0x3E/0x25 ; HCI_LE_Periodic_Advertising_Report[v1]=0x3E/0x0F]
+  Versions:
+    HCI_LE_Periodic_Advertising_Report[v2]: Subevent_Code, Sync_Handle, TX_Power, RSSI, CTE_Type, Periodic_Event_Counter, Subevent, Data_Status, Data_Length, Data
+    HCI_LE_Periodic_Advertising_Report[v1]: Subevent_Code, Sync_Handle, TX_Power, RSSI, CTE_Type, Data_Status, Data_Length, Data
   Event parameters:
     Subevent_Code: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
@@ -1603,32 +1623,32 @@
     Data_Status: 1 octet
     Data_Length: 1 octet
     Data: Data_Length octets
-## 7.7.65.16 LE Periodic Advertising Sync Lost event  [HCI_LE_Periodic_Advertising_Sync_Lost=0x3E] subevent=0x10
+## 7.7.65.16 LE Periodic Advertising Sync Lost event  [HCI_LE_Periodic_Advertising_Sync_Lost=0x3E/0x10]
   Event parameters:
     Subevent_Code: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
-## 7.7.65.17 LE Scan Timeout event  [HCI_LE_Scan_Timeout=0x3E] subevent=0x11
+## 7.7.65.17 LE Scan Timeout event  [HCI_LE_Scan_Timeout=0x3E/0x11]
   Event parameters:
     Subevent_Code: 1 octet
-## 7.7.65.18 LE Advertising Set Terminated event  [HCI_LE_Advertising_Set_-=0x3E] subevent=0x12
+## 7.7.65.18 LE Advertising Set Terminated event  [HCI_LE_Advertising_Set_Terminated=0x3E/0x12]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Advertising_Handle: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Num_Completed_Extended_Advertising_Events: 1 octet
-## 7.7.65.19 LE Scan Request Received event  [HCI_LE_Scan_Request_Received=0x3E] subevent=0x13
+## 7.7.65.19 LE Scan Request Received event  [HCI_LE_Scan_Request_Received=0x3E/0x13]
   Event parameters:
     Subevent_Code: 1 octet
     Advertising_Handle: 1 octet
     Scanner_Address_Type: 1 octet
     Scanner_Address: 6 octets
-## 7.7.65.20 LE Channel Selection Algorithm event  [HCI_LE_Channel_Selection_Algorithm=0x3E] subevent=0x14
+## 7.7.65.20 LE Channel Selection Algorithm event  [HCI_LE_Channel_Selection_Algorithm=0x3E/0x14]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Channel_Selection_Algorithm: 1 octet
-## 7.7.65.21 LE Connectionless IQ Report event  [HCI_LE_Connectionless_IQ_Report=0x3E] subevent=0x15
+## 7.7.65.21 LE Connectionless IQ Report event  [HCI_LE_Connectionless_IQ_Report=0x3E/0x15]
   Event parameters:
     Subevent_Code: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
@@ -1642,7 +1662,7 @@
     Sample_Count: 1 octet
     I_Sample[i]: Sample_Count × 1 octet
     Q_Sample[i]: Sample Count × 1 octet
-## 7.7.65.22 LE Connection IQ Report event  [HCI_LE_Connection_IQ_Report=0x3E] subevent=0x16
+## 7.7.65.22 LE Connection IQ Report event  [HCI_LE_Connection_IQ_Report=0x3E/0x16]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
@@ -1657,12 +1677,15 @@
     Sample_Count: 1 octet
     I_Sample[i]: Sample_Count × 1 octet
     Q_Sample[i]: Sample_Count × 1 octet
-## 7.7.65.23 LE CTE Request Failed event  [HCI_LE_CTE_Request_Failed=0x3E] subevent=0x17
+## 7.7.65.23 LE CTE Request Failed event  [HCI_LE_CTE_Request_Failed=0x3E/0x17]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.7.65.24 LE Periodic Advertising Sync Transfer Received event  [HCI_LE_Periodic_Advertising_Sync_Transfer_Re-=0x3E] subevent=0x18
+## 7.7.65.24 LE Periodic Advertising Sync Transfer Received event  [HCI_LE_Periodic_Advertising_Sync_Transfer_Received[v2]=0x3E/0x26 ; HCI_LE_Periodic_Advertising_Sync_Transfer_Received[v1]=0x3E/0x18]
+  Versions:
+    HCI_LE_Periodic_Advertising_Sync_Transfer_Received[v2]: Subevent_Code, Status, Connection_Handle, Service_Data, Sync_Handle, Advertising_SID, Advertiser_Address_Type, Advertiser_Address, Advertiser_PHY, Periodic_Advertising_Interval, Advertiser_Clock_Accuracy, Num_Subevents, Subevent_Interval, Response_Slot_Delay, Response_Slot_Spacing
+    HCI_LE_Periodic_Advertising_Sync_Transfer_Received[v1]: Subevent_Code, Status, Connection_Handle, Service_Data, Sync_Handle, Advertising_SID, Advertiser_Address_Type, Advertiser_Address, Advertiser_PHY, Periodic_Advertising_Interval, Advertiser_Clock_Accuracy
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1679,7 +1702,10 @@
     Subevent_Interval: 1 octet
     Response_Slot_Delay: 1 octet
     Response_Slot_Spacing: 1 octet
-## 7.7.65.25 LE CIS Established event  [HCI_LE_CIS_Established[v2]=0x3E ; HCI_LE_CIS_Established[v1]=0x3E]
+## 7.7.65.25 LE CIS Established event  [HCI_LE_CIS_Established[v2]=0x3E/0x2A ; HCI_LE_CIS_Established[v1]=0x3E/0x19]
+  Versions:
+    HCI_LE_CIS_Established[v2]: Subevent_Code, Status, Connection_Handle, CIG_Sync_Delay, CIS_Sync_Delay, Transport_Latency_C_To_P, Transport_Latency_P_To_C, PHY_C_To_P, PHY_P_To_C, NSE, BN_C_To_P, BN_P_To_C, FT_C_To_P, FT_P_To_C, Max_PDU_C_To_P, Max_PDU_P_To_C, ISO_Interval, Sub_Interval, Max_SDU_C_To_P, Max_SDU_P_To_C, SDU_Interval_C_To_P, SDU_Interval_P_To_C, Framing
+    HCI_LE_CIS_Established[v1]: Subevent_Code, Status, Connection_Handle, CIG_Sync_Delay, CIS_Sync_Delay, Transport_Latency_C_To_P, Transport_Latency_P_To_C, PHY_C_To_P, PHY_P_To_C, NSE, BN_C_To_P, BN_P_To_C, FT_C_To_P, FT_P_To_C, Max_PDU_C_To_P, Max_PDU_P_To_C, ISO_Interval
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1704,14 +1730,14 @@
     SDU_Interval_C_To_P: 3 octets
     SDU_Interval_P_To_C: 3 octets
     Framing: 1 octet
-## 7.7.65.26 LE CIS Request event  [HCI_LE_CIS_Request=0x3E]
+## 7.7.65.26 LE CIS Request event  [HCI_LE_CIS_Request=0x3E/0x1A]
   Event parameters:
     Subevent_Code: 1 octet
     ACL_Connection_Handle: 2 octets (12 bits meaningful)
     CIS_Connection_Handle: 2 octets (12 bits meaningful)
     CIG_ID: 1 octet
     CIS_ID: 1 octet
-## 7.7.65.27 LE Create BIG Complete event  [HCI_LE_Create_BIG_Complete=0x3E]
+## 7.7.65.27 LE Create BIG Complete event  [HCI_LE_Create_BIG_Complete=0x3E/0x1B]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1727,12 +1753,12 @@
     ISO_Interval: 2 octets
     Num_BIS: 1 octet
     Connection_Handle[i]: 2 octets (12 bits meaningful) × Num_BIS
-## 7.7.65.28 LE Terminate BIG Complete event  [HCI_LE_Terminate_BIG_Complete=0x3E]
+## 7.7.65.28 LE Terminate BIG Complete event  [HCI_LE_Terminate_BIG_Complete=0x3E/0x1C]
   Event parameters:
     Subevent_Code: 1 octet
     BIG_Handle: 1 octet
     Reason: 1 octet
-## 7.7.65.29 LE BIG Sync Established event  [HCI_LE_BIG_Sync_Established=0x3E]
+## 7.7.65.29 LE BIG Sync Established event  [HCI_LE_BIG_Sync_Established=0x3E/0x1D]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1746,24 +1772,24 @@
     ISO_Interval: 2 octets
     Num_BIS: 1 octet
     Connection_Handle[i]: Num_BIS × 2 octets (12 bits meaningful)
-## 7.7.65.30 LE BIG Sync Lost event  [HCI_LE_BIG_Sync_Lost=0x3E]
+## 7.7.65.30 LE BIG Sync Lost event  [HCI_LE_BIG_Sync_Lost=0x3E/0x1E]
   Event parameters:
     Subevent_Code: 1 octet
     BIG_Handle: 1 octet
     Reason: 1 octet
-## 7.7.65.31 LE Request Peer SCA Complete event  [HCI_LE_Request_Peer_SCA_Complete=0x3E]
+## 7.7.65.31 LE Request Peer SCA Complete event  [HCI_LE_Request_Peer_SCA_Complete=0x3E/0x1F]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Peer_Clock_Accuracy: 1 octet
-## 7.7.65.32 LE Path Loss Threshold event  [HCI_LE_Path_Loss_Threshold=0x3E] subevent=0x20
+## 7.7.65.32 LE Path Loss Threshold event  [HCI_LE_Path_Loss_Threshold=0x3E/0x20]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Current_Path_Loss: 1 octet
     Zone_Entered: 1 octet
-## 7.7.65.33 LE Transmit Power Reporting event  [HCI_LE_Transmit_Power_Reporting=0x3E] subevent=0x21
+## 7.7.65.33 LE Transmit Power Reporting event  [HCI_LE_Transmit_Power_Reporting=0x3E/0x21]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1773,7 +1799,7 @@
     TX_Power_Level: 1 octet
     TX_Power_Level_Flag: 1 octet
     Delta: 1 octet
-## 7.7.65.34 LE BIGInfo Advertising Report event  [HCI_LE_BIGInfo_Advertising_Report=0x3E] subevent=0x22
+## 7.7.65.34 LE BIGInfo Advertising Report event  [HCI_LE_BIGInfo_Advertising_Report=0x3E/0x22]
   Event parameters:
     Subevent_Code: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
@@ -1789,7 +1815,7 @@
     PHY: 1 octet
     Framing: 1 octet
     Encryption: 1 octet
-## 7.7.65.35 LE Subrate Change event  [HCI_LE_Subrate_Change=0x3E]
+## 7.7.65.35 LE Subrate Change event  [HCI_LE_Subrate_Change=0x3E/0x23]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1798,13 +1824,13 @@
     Peripheral_Latency: 2 octets
     Continuation_Number: 2 octets
     Supervision_Timeout: 2 octets
-## 7.7.65.36 LE Periodic Advertising Subevent Data Request event  [HCI_LE_Periodic_Advertising_Subevent_Data_Request=0x3E] subevent=0x27
+## 7.7.65.36 LE Periodic Advertising Subevent Data Request event  [HCI_LE_Periodic_Advertising_Subevent_Data_Request=0x3E/0x27]
   Event parameters:
     Subevent_Code: 1 octet
     Advertising_Handle: 1 octet
     Subevent_Start: 1 octet
     Subevent_Data_Count: 1 octet
-## 7.7.65.37 LE Periodic Advertising Response Report event  [HCI_LE_Periodic_Advertising_Response_Report=0x3E] subevent=0x28
+## 7.7.65.37 LE Periodic Advertising Response Report event  [HCI_LE_Periodic_Advertising_Response_Report=0x3E/0x28]
   Event parameters:
     Subevent_Code: 1 octet
     Advertising_Handle: 1 octet
@@ -1818,7 +1844,7 @@
     Data_Status[i]: Num_Responses × 1 octet
     Data_Length[i]: Num_Responses × 1 octet
     Data[i]: SUM (Data_Length[i]) octets
-## 7.7.65.38 LE Read All Remote Features Complete event  [HCI_LE_Read_All_Remote_Features_Complete=0x3E] subevent=0x2B
+## 7.7.65.38 LE Read All Remote Features Complete event  [HCI_LE_Read_All_Remote_Features_Complete=0x3E/0x2B]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1826,7 +1852,10 @@
     Max_Remote_Page: 1 octet
     Max_Valid_Page: 1 octet
     LE_Features: 248 octets
-## 7.7.65.39 LE CS Read Remote Supported Capabilities Complete event  [HCI_LE_CS_Read_Remote_Suppor-=0x3E ; HCI_LE_CS_Read_Remote_Supported_-=0x3E] subevent=0x2C
+## 7.7.65.39 LE CS Read Remote Supported Capabilities Complete event  [HCI_LE_CS_Read_Remote_Supported_Capabilities_Complete[v2]=0x3E/0x38 ; HCI_LE_CS_Read_Remote_Supported_Capabilities_Complete[v1]=0x3E/0x2C]
+  Versions:
+    HCI_LE_CS_Read_Remote_Supported_Capabilities_Complete[v2]: Subevent_Code, Status, Connection_Handle, Num_Config_Supported, Max_Consecutive_Procedures_Supported, Num_Antennae_Supported, Max_Antenna_Paths_Supported, Roles_Supported, Modes_Supported, RTT_Capability, RTT_AA_Only_N, RTT_Sounding_N, RTT_Random_Sequence_N, NADM_Sounding_Capability, NADM_Random_Capability, CS_SYNC_PHYs_Supported, Subfeatures_Supported, T_IP1_Times_Supported, T_IP2_Times_Supported, T_FCS_Times_Supported, T_PM_Times_Supported, T_SW_Time_Supported, TX_SNR_Capability, T_IP2_IPT_Times_Supported, T_SW_IPT_Times_Supported, RTT_2M_AA_Only_N, RTT_2M_Sounding_N, RTT_2M_Random_Sequence_N
+    HCI_LE_CS_Read_Remote_Supported_Capabilities_Complete[v1]: Subevent_Code, Status, Connection_Handle, Num_Config_Supported, Max_Consecutive_Procedures_Supported, Num_Antennae_Supported, Max_Antenna_Paths_Supported, Roles_Supported, Modes_Supported, RTT_Capability, RTT_AA_Only_N, RTT_Sounding_N, RTT_Random_Sequence_N, NADM_Sounding_Capability, NADM_Random_Capability, CS_SYNC_PHYs_Supported, Subfeatures_Supported, T_IP1_Times_Supported, T_IP2_Times_Supported, T_FCS_Times_Supported, T_PM_Times_Supported, T_SW_Time_Supported, TX_SNR_Capability
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1856,18 +1885,18 @@
     RTT_2M_AA_Only_N: 1 octet
     RTT_2M_Sounding_N: 1 octet
     RTT_2M_Random_Sequence_N: 1 octet
-## 7.7.65.40 LE CS Read Remote FAE Table Complete event  [HCI_LE_CS_Read_Remote_FAE_Table_Complete=0x3E] subevent=0x2D
+## 7.7.65.40 LE CS Read Remote FAE Table Complete event  [HCI_LE_CS_Read_Remote_FAE_Table_Complete=0x3E/0x2D]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
     Remote_FAE_Table: 72 octets
-## 7.7.65.41 LE CS Security Enable Complete event  [HCI_LE_CS_Security_Enable_Complete=0x3E] subevent=0x2E
+## 7.7.65.41 LE CS Security Enable Complete event  [HCI_LE_CS_Security_Enable_Complete=0x3E/0x2E]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Connection_Handle: 2 octets (meaningful)
-## 7.7.65.42 LE CS Config Complete event  [HCI_LE_CS_Config_Complete=0x3E] subevent=0x2F
+## 7.7.65.42 LE CS Config Complete event  [HCI_LE_CS_Config_Complete=0x3E/0x2F]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1893,7 +1922,7 @@
     T_IP2_Time: 1 octet
     T_FCS_Time: 1 octet
     T_PM_Time: 1 octet
-## 7.7.65.43 LE CS Procedure Enable Complete event  [HCI_LE_CS_Procedure_Enable_Complete=0x3E] subevent=0x30
+## 7.7.65.43 LE CS Procedure Enable Complete event  [HCI_LE_CS_Procedure_Enable_Complete=0x3E/0x30]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1909,7 +1938,7 @@
     Procedure_Interval: 2 octets
     Procedure_Count: 2 octets
     Max_Procedure_Len: 2 octets
-## 7.7.65.44 LE CS Subevent Result event  [HCI_LE_CS_Subevent_Result=0x3E] subevent=0x31
+## 7.7.65.44 LE CS Subevent Result event  [HCI_LE_CS_Subevent_Result=0x3E/0x31]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets
@@ -1939,7 +1968,7 @@
     Antenna_Path_Permutation_Index: 1 octet
     Tone_PCT[k]: (Num_Antenna_Paths + 1) × 3 octets
     Tone_Quality_Indicator[k]: (Num_Antenna_Paths + 1) × 1 octet
-## 7.7.65.45 LE CS Subevent Result Continue event  [HCI_LE_CS_Subevent_Result_Continue=0x3E] subevent=0x32
+## 7.7.65.45 LE CS Subevent Result Continue event  [HCI_LE_CS_Subevent_Result_Continue=0x3E/0x32]
   Event parameters:
     Subevent_Code: 1 octet
     Connection_Handle: 2 octets
@@ -1953,17 +1982,17 @@
     Step_Channel[i]: Num_Steps_Reported × 1 octet
     Step_Data_Length[i]: Num_Steps_Reported × 1 octet
     Step_Data[i]: ∑i (Step_Data_Length[i]) octets
-## 7.7.65.46 LE CS Test End Complete event  [HCI_LE_CS_Test_End_Complete=0x3E] subevent=0x33
+## 7.7.65.46 LE CS Test End Complete event  [HCI_LE_CS_Test_End_Complete=0x3E/0x33]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
-## 7.7.65.47 LE Monitored Advertisers Report event  [HCI_LE_Monitored_Advertisers_Report=0x3E] subevent=0x34
+## 7.7.65.47 LE Monitored Advertisers Report event  [HCI_LE_Monitored_Advertisers_Report=0x3E/0x34]
   Event parameters:
     Subevent_Code: 1 octet
     Address_Type: 1 octet
     Address: 6 octets
     Condition: 1 octet
-## 7.7.65.48 LE Frame Space Update Complete event  [HCI_LE_Frame_Space_Update_Complete=0x3E] subevent=0x35
+## 7.7.65.48 LE Frame Space Update Complete event  [HCI_LE_Frame_Space_Update_Complete=0x3E/0x35]
   Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
@@ -1972,11 +2001,13 @@
     Frame_Space: 2 octets
     PHYS: 1 octet
     Spacing_Types: 2 octets
-## 7.7.65.49 LE UTP Receive event  [HCI_LE_UTP_Receive=0x3E] subevent=0x36
+## 7.7.65.49 LE UTP Receive event  [HCI_LE_UTP_Receive=0x3E/0x36]
+  Event parameters:
     Subevent_Code: 1 octet
     UTP_Data_Length: 1 octet
     UTP_Data: UTP_Data_Length octets
-## 7.7.65.50 LE Connection Rate Change event  [HCI_LE_Connection_Rate_Change=0x3E] subevent=0x37
+## 7.7.65.50 LE Connection Rate Change event  [HCI_LE_Connection_Rate_Change=0x3E/0x37]
+  Event parameters:
     Subevent_Code: 1 octet
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
@@ -1994,7 +2025,7 @@
 ## 7.7.67 Synchronization Train Complete event  [HCI_Synchronization_Train_Complete=0x4F]
   Event parameters:
     Status: 1 octet
-## 7.7.68 Synchronization Train Received event  [HCI_Synchronization_Train_Re-=0x50]
+## 7.7.68 Synchronization Train Received event  [HCI_Synchronization_Train_Received=0x50]
   Event parameters:
     Status: 1 octet
     BD_ADDR: 6 octets
@@ -2024,7 +2055,7 @@
     BD_ADDR: 6 octets
 ## 7.7.72 Peripheral Page Response Timeout event  [HCI_Peripheral_Page_Response_Timeout=0x54]
   Event parameters:
-## 7.7.73 Connectionless Peripheral Broadcast Channel Map Change event  [HCI_Connectionless_Peripheral_Broadcast_Chan-=0x55]
+## 7.7.73 Connectionless Peripheral Broadcast Channel Map Change event  [HCI_Connectionless_Peripheral_Broadcast_Channel_Map_Change=0x55]
   Event parameters:
     Channel_Map: 10 octets (79 bits meaningful)
 ## 7.7.74 Inquiry Response Notification event  [HCI_Inquiry_Response_Notification=0x56]
@@ -2044,10 +2075,18 @@
     Remote_SAM_TX_Availability: 1 octet
     Remote_SAM_RX_Availability: 1 octet
 ## 7.8.1 LE Set Event Mask command  [HCI_LE_Set_Event_Mask[v2]=0x00A4 ; HCI_LE_Set_Event_Mask[v1]=0x0001]
+  Versions:
+    HCI_LE_Set_Event_Mask[v2]: LE_Event_Mask -> Status
+    HCI_LE_Set_Event_Mask[v1]: LE_Event_Mask -> Status
   Command parameters:
+    LE_Event_Mask[v1]: 8 octets
+    LE_Event_Mask[v2]: 255 octets
   Return parameters:
     Status: 1 octet
 ## 7.8.2 LE Read Buffer Size command  [HCI_LE_Read_Buffer_Size[v2]=0x0060 ; HCI_LE_Read_Buffer_Size[v1]=0x0002]
+  Versions:
+    HCI_LE_Read_Buffer_Size[v2]: none -> Status, LE_ACL_Data_Packet_Length, Total_Num_LE_ACL_Data_Packets, ISO_Data_Packet_Length, Total_Num_ISO_Data_Packets
+    HCI_LE_Read_Buffer_Size[v1]: none -> Status, LE_ACL_Data_Packet_Length, Total_Num_LE_ACL_Data_Packets
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -2055,7 +2094,7 @@
     Total_Num_LE_ACL_Data_Packets: 1 octet
     ISO_Data_Packet_Length: 2 octets
     Total_Num_ISO_Data_Packets: 1 octet
-## 7.8.3 LE Read Local Supported Features Page 0 command  [HCI_LE_Read_Local_Supported_-=0x0003]
+## 7.8.3 LE Read Local Supported Features Page 0 command  [HCI_LE_Read_Local_Supported_Features_Page_0=0x0003]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -2077,7 +2116,7 @@
     Advertising_Filter_Policy: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.6 LE Read Advertising Physical Channel Tx Power command  [HCI_LE_Read_Advertising_Channel_Tx_-=0x0007]
+## 7.8.6 LE Read Advertising Physical Channel Tx Power command  [HCI_LE_Read_Advertising_Channel_Tx_Power=0x0007]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -2088,7 +2127,7 @@
     Advertising_Data: 31 octets
   Return parameters:
     Status: 1 octet
-## 7.8.8 LE Set Scan Response Data command  [HCI_LE_Set_Scan_Response_-=0x0009]
+## 7.8.8 LE Set Scan Response Data command  [HCI_LE_Set_Scan_Response_Data=0x0009]
   Command parameters:
     Scan_Response_Data_Length: 1 octet
     Scan_Response_Data: 31 octets
@@ -2142,13 +2181,13 @@
   Command parameters:
   Return parameters:
     Status: 1 octet
-## 7.8.16 LE Add Device To Filter Accept List command  [HCI_LE_Add_Device_To_Filter_Accept_-=0x0011]
+## 7.8.16 LE Add Device To Filter Accept List command  [HCI_LE_Add_Device_To_Filter_Accept_List=0x0011]
   Command parameters:
     Address_Type: 1 octet
     Address: 6 octets
   Return parameters:
     Status: 1 octet
-## 7.8.17 LE Remove Device From Filter Accept List command  [HCI_LE_Remove_Device_From_Filter_-=0x0012]
+## 7.8.17 LE Remove Device From Filter Accept List command  [HCI_LE_Remove_Device_From_Filter_Accept_List=0x0012]
   Command parameters:
     Address_Type: 1 octet
     Address: 6 octets
@@ -2206,7 +2245,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.26 LE Long Term Key Request Negative Reply command  [HCI_LE_Long_Term_Key_Request_-=0x001B]
+## 7.8.26 LE Long Term Key Request Negative Reply command  [HCI_LE_Long_Term_Key_Request_Negative_Reply=0x001B]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
   Return parameters:
@@ -2217,6 +2256,18 @@
   Return parameters:
     Status: 1 octet
 ## 7.8.28 LE Receiver Test command  [HCI_LE_Receiver_Test[v3]=0x004F ; HCI_LE_Receiver_Test[v2]=0x0033 ; HCI_LE_Receiver_Test[v1]=0x001D]
+  Versions:
+    HCI_LE_Receiver_Test[v3]: RX_Channel, PHY, Modulation_Index, Expected_CTE_Length, Expected_CTE_Type, Slot_Durations, Switching_Pattern_Length, Antenna_IDs[i] -> Status
+    HCI_LE_Receiver_Test[v2]: RX_Channel, PHY, Modulation_Index -> Status
+    HCI_LE_Receiver_Test[v1]: RX_Channel -> Status
+  Missing parameters:
+    PHY: 0x01
+    Modulation_Index: 0x00
+    Expected_CTE_Length: 0x00
+    Expected_CTE_Type: any valid value
+    Slot_Durations: any valid value
+    Switching_Pattern_Length: any valid value
+    Antenna_IDs[i]: any valid value
   Command parameters:
     RX_Channel: 1 octet
     PHY: 1 octet
@@ -2229,6 +2280,18 @@
   Return parameters:
     Status: 1 octet
 ## 7.8.29 LE Transmitter Test command  [HCI_LE_Transmitter_Test[v4]=0x007B ; HCI_LE_Transmitter_Test[v3]=0x0050 ; HCI_LE_Transmitter_Test[v2]=0x0034 ; HCI_LE_Transmitter_Test[v1]=0x001E]
+  Versions:
+    HCI_LE_Transmitter_Test[v4]: TX_Channel, Test_Data_Length, Packet_Payload, PHY, CTE_Length, CTE_Type, Switching_Pattern_Length, Antenna_IDs[i], TX_Power_Level -> Status
+    HCI_LE_Transmitter_Test[v3]: TX_Channel, Test_Data_Length, Packet_Payload, PHY, CTE_Length, CTE_Type, Switching_Pattern_Length, Antenna_IDs[i] -> Status
+    HCI_LE_Transmitter_Test[v2]: TX_Channel, Test_Data_Length, Packet_Payload, PHY -> Status
+    HCI_LE_Transmitter_Test[v1]: TX_Channel, Test_Data_Length, Packet_Payload -> Status
+  Missing parameters:
+    PHY: 0x01
+    CTE_Length: 0x00
+    CTE_Type: any valid value
+    Switching_Pattern_Length: any valid value
+    Antenna_IDs[i]: any valid value
+    TX_Power_Level: 0x7F
   Command parameters:
     TX_Channel: 1 octet
     Test_Data_Length: 1 octet
@@ -2246,7 +2309,7 @@
   Return parameters:
     Status: 1 octet
     Num_Packets: 2 octets
-## 7.8.31 LE Remote Connection Parameter Request Reply command  [HCI_LE_Remote_Connection_-=0x0020]
+## 7.8.31 LE Remote Connection Parameter Request Reply command  [HCI_LE_Remote_Connection_Parameter_Request_Reply=0x0020]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Interval_Min: 2 octets
@@ -2258,7 +2321,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.32 LE Remote Connection Parameter Request Negative Reply command  [HCI_LE_Remote_Connection_-=0x0021]
+## 7.8.32 LE Remote Connection Parameter Request Negative Reply command  [HCI_LE_Remote_Connection_Parameter_Request_Negative_Reply=0x0021]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Reason: 1 octet
@@ -2273,28 +2336,33 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.34 LE Read Suggested Default Data Length command  [HCI_LE_Read_Suggested_-=0x0023]
+## 7.8.34 LE Read Suggested Default Data Length command  [HCI_LE_Read_Suggested_Default_Data_Length=0x0023]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Suggested_Max_TX_Octets: 2 octets
     Suggested_Max_TX_Time: 2 octets
-## 7.8.35 LE Write Suggested Default Data Length command  [HCI_LE_Write_Suggested_Default_-=0x0024]
+## 7.8.35 LE Write Suggested Default Data Length command  [HCI_LE_Write_Suggested_Default_Data_Length=0x0024]
   Command parameters:
     Suggested_Max_TX_Octets: 2 octets
     Suggested_Max_TX_Time: 2 octets
   Return parameters:
     Status: 1 octet
-## 7.8.36 LE Read Local P-256 Public Key command  []
+## 7.8.36 LE Read Local P-256 Public Key command  [HCI_LE_Read_Local_P-256_Public_Key=0x0025]
   Command parameters:
   Return parameters:
 ## 7.8.37 LE Generate DHKey command  [HCI_LE_Generate_DHKey[v2]=0x005E ; HCI_LE_Generate_DHKey[v1]=0x0026]
+  Versions:
+    HCI_LE_Generate_DHKey[v2]: Key_X_Coordinate, Key_Y_Coordinate, Key_Type -> none
+    HCI_LE_Generate_DHKey[v1]: Key_X_Coordinate, Key_Y_Coordinate -> none
+  Missing parameters:
+    Key_Type: 0x00
   Command parameters:
     Key_X_Coordinate: 32 octets
     Key_Y_Coordinate: 32 octets
     Key_Type: 1 octet
   Return parameters:
-## 7.8.38 LE Add Device To Resolving List command  [HCI_LE_Add_Device_To_-=0x0027]
+## 7.8.38 LE Add Device To Resolving List command  [HCI_LE_Add_Device_To_Resolving_List=0x0027]
   Command parameters:
     Peer_Identity_Address_Type: 1 octet
     Peer_Identity_Address: 6 octets
@@ -2302,7 +2370,7 @@
     Local_IRK: 16 octets
   Return parameters:
     Status: 1 octet
-## 7.8.39 LE Remove Device From Resolving List command  [HCI_LE_Remove_Device_From_-=0x0028]
+## 7.8.39 LE Remove Device From Resolving List command  [HCI_LE_Remove_Device_From_Resolving_List=0x0028]
   Command parameters:
     Peer_Identity_Address_Type: 1 octet
     Peer_Identity_Address: 6 octets
@@ -2317,33 +2385,36 @@
   Return parameters:
     Status: 1 octet
     Resolving_List_Size: 1 octet
-## 7.8.42 LE Read Peer Resolvable Address command  [HCI_LE_Read_Peer_-=0x002B]
+## 7.8.42 LE Read Peer Resolvable Address command  [HCI_LE_Read_Peer_Resolvable_Address=0x002B]
   Command parameters:
     Peer_Identity_Address_Type: 1 octet
     Peer_Identity_Address: 6 octets
   Return parameters:
     Status: 1 octet
     Peer_Resolvable_Address: 6 octets
-## 7.8.43 LE Read Local Resolvable Address command  [HCI_LE_Read_Local_-=0x002C]
+## 7.8.43 LE Read Local Resolvable Address command  [HCI_LE_Read_Local_Resolvable_Address=0x002C]
   Command parameters:
     Peer_Identity_Address_Type: 1 octet
     Peer_Identity_Address: 6 octets
   Return parameters:
     Status: 1 octet
     Local_Resolvable_Address: 6 octets
-## 7.8.44 LE Set Address Resolution Enable command  [HCI_LE_Set_Address_Resolution_-=0x002D]
+## 7.8.44 LE Set Address Resolution Enable command  [HCI_LE_Set_Address_Resolution_Enable=0x002D]
   Command parameters:
     Address_Resolution_Enable: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.45 LE Set Resolvable Private Address Timeout command  [HCI_LE_Set_Resolvable_Private_Ad-=0x009E ; HCI_LE_Set_Resolvable_Private_-=0x002E]
+## 7.8.45 LE Set Resolvable Private Address Timeout command  [HCI_LE_Set_Resolvable_Private_Address_Timeout[v2]=0x009E ; HCI_LE_Set_Resolvable_Private_Address_Timeout[v1]=0x002E]
+  Versions:
+    HCI_LE_Set_Resolvable_Private_Address_Timeout[v2]: RPA_Timeout_Min, RPA_Timeout_Max -> Status
+    HCI_LE_Set_Resolvable_Private_Address_Timeout[v1]: RPA_Timeout -> Status
   Command parameters:
     RPA_Timeout: 2 octets
     RPA_Timeout_Min: 2 octets
     RPA_Timeout_Max: 2 octets
   Return parameters:
     Status: 1 octet
-## 7.8.46 LE Read Maximum Data Length command  [HCI_LE_Read_Maximum_Data_-=0x002F]
+## 7.8.46 LE Read Maximum Data Length command  [HCI_LE_Read_Maximum_Data_Length=0x002F]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -2374,13 +2445,19 @@
     RX_PHYs: 1 octet
     PHY_Options: 2 octets
   Return parameters:
-## 7.8.52 LE Set Advertising Set Random Address command  [HCI_LE_Set_Advertising_Set_Random_-=0x0035]
+## 7.8.52 LE Set Advertising Set Random Address command  [HCI_LE_Set_Advertising_Set_Random_Address=0x0035]
   Command parameters:
     Advertising_Handle: 1 octet
     Random_Address: 6 octets
   Return parameters:
     Status: 1 octet
-## 7.8.53 LE Set Extended Advertising Parameters command  [HCI_LE_Set_Extended_-=0x007F ; HCI_LE_Set_Extended_-=0x0036]
+## 7.8.53 LE Set Extended Advertising Parameters command  [HCI_LE_Set_Extended_Advertising_Parameters[v2]=0x007F ; HCI_LE_Set_Extended_Advertising_Parameters[v1]=0x0036]
+  Versions:
+    HCI_LE_Set_Extended_Advertising_Parameters[v2]: Advertising_Handle, Advertising_Event_Properties, Primary_Advertising_Interval_Min, Primary_Advertising_Interval_Max, Primary_Advertising_Channel_Map, Own_Address_Type, Peer_Address_Type, Peer_Address, Advertising_Filter_Policy, Advertising_TX_Power, Primary_Advertising_PHY, Secondary_Advertising_Max_Skip, Secondary_Advertising_PHY, Advertising_SID, Scan_Request_Notification_Enable Primary_Advertising_PHY_Options, Secondary_Advertising_PHY_Options -> Status, Selected_TX_Power
+    HCI_LE_Set_Extended_Advertising_Parameters[v1]: Advertising_Handle, Advertising_Event_Properties, Primary_Advertising_Interval_Min, Primary_Advertising_Interval_Max, Primary_Advertising_Channel_Map, Own_Address_Type, Peer_Address_Type, Peer_Address, Advertising_Filter_Policy, Advertising_TX_Power, Primary_Advertising_PHY, Secondary_Advertising_Max_Skip, Secondary_Advertising_PHY, Advertising_SID, Scan_Request_Notification_Enable -> Status, Selected_TX_Power
+  Missing parameters:
+    Primary_Advertising_PHY_Options: 0x00
+    Secondary_Advertising_PHY_Options: 0x00
   Command parameters:
     Advertising_Handle: 1 octet
     Advertising_Event_Properties: 2 octets
@@ -2402,7 +2479,7 @@
   Return parameters:
     Status: 1 octet
     Selected_TX_Power: 1 octet
-## 7.8.54 LE Set Extended Advertising Data command  [HCI_LE_Set_Extended_Advertising_-=0x0037]
+## 7.8.54 LE Set Extended Advertising Data command  [HCI_LE_Set_Extended_Advertising_Data=0x0037]
   Command parameters:
     Advertising_Handle: 1 octet
     Operation: 1 octet
@@ -2411,7 +2488,7 @@
     Advertising_Data: Advertising_Data_Length octets
   Return parameters:
     Status: 1 octet
-## 7.8.55 LE Set Extended Scan Response Data command  [HCI_LE_Set_Extended_Scan_-=0x0038]
+## 7.8.55 LE Set Extended Scan Response Data command  [HCI_LE_Set_Extended_Scan_Response_Data=0x0038]
   Command parameters:
     Advertising_Handle: 1 octet
     Operation: 1 octet
@@ -2420,7 +2497,7 @@
     Scan_Response_Data: Scan_Response_Data_Length octets
   Return parameters:
     Status: 1 octet
-## 7.8.56 LE Set Extended Advertising Enable command  [HCI_LE_Set_Extended_-=0x0039]
+## 7.8.56 LE Set Extended Advertising Enable command  [HCI_LE_Set_Extended_Advertising_Enable=0x0039]
   Command parameters:
     Enable: 1 octet
     Num_Sets: 1 octet
@@ -2429,12 +2506,12 @@
     Max_Extended_Advertising_Events[i]: Num_Sets × 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.57 LE Read Maximum Advertising Data Length command  [HCI_LE_Read_Maximum_-=0x003A]
+## 7.8.57 LE Read Maximum Advertising Data Length command  [HCI_LE_Read_Maximum_Advertising_Data_Length=0x003A]
   Command parameters:
   Return parameters:
     Status: 1 octet
     Max_Advertising_Data_Length: 2 octets
-## 7.8.58 LE Read Number of Supported Advertising Sets command  [HCI_LE_Read_Number_of_-=0x003B]
+## 7.8.58 LE Read Number of Supported Advertising Sets command  [HCI_LE_Read_Number_of_Supported_Advertising_Sets=0x003B]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -2448,7 +2525,16 @@
   Command parameters:
   Return parameters:
     Status: 1 octet
-## 7.8.61 LE Set Periodic Advertising Parameters command  [HCI_LE_Set_Periodic_-=0x0086 ; HCI_LE_Set_Periodic_-=0x003E]
+## 7.8.61 LE Set Periodic Advertising Parameters command  [HCI_LE_Set_Periodic_Advertising_Parameters[v2]=0x0086 ; HCI_LE_Set_Periodic_Advertising_Parameters[v1]=0x003E]
+  Versions:
+    HCI_LE_Set_Periodic_Advertising_Parameters[v2]: Advertising_Handle, Periodic_Advertising_Interval_Min, Periodic_Advertising_Interval_Max, Periodic_Advertising_Properties, Num_Subevents, Subevent_Interval, Response_Slot_Delay, Response_Slot_Spacing, Num_Response_Slots -> Status, Advertising_Handle
+    HCI_LE_Set_Periodic_Advertising_Parameters[v1]: Advertising_Handle, Periodic_Advertising_Interval_Min, Periodic_Advertising_Interval_Max, Periodic_Advertising_Properties -> Status
+  Missing parameters:
+    Num_Subevents: 0
+    Subevent_Interval: ignored
+    Response_Slot_Delay: ignored
+    Response_Slot_Spacing: ignored
+    Num_Response_Slots: ignored
   Command parameters:
     Advertising_Handle: 1 octet
     Periodic_Advertising_Interval_Min: 2 octets
@@ -2494,7 +2580,13 @@
     Period: 2 octets
   Return parameters:
     Status: 1 octet
-## 7.8.66 LE Extended Create Connection command  [HCI_LE_Extended_Create_Connection=0x0085 ; HCI_LE_Extended_Create_Connection=0x0043]
+## 7.8.66 LE Extended Create Connection command  [HCI_LE_Extended_Create_Connection[v2]=0x0085 ; HCI_LE_Extended_Create_Connection[v1]=0x0043]
+  Versions:
+    HCI_LE_Extended_Create_Connection[v2]: Advertising_Handle, Subevent, Initiator_Filter_Policy, Own_Address_Type, Peer_Address_Type, Peer_Address, Initiating_PHYs, Scan_Interval[i], Scan_Window[i], Connection_Interval_Min[i], Connection_Interval_Max[i], Max_Latency[i], Supervision_Timeout[i], Min_CE_Length[i], Max_CE_Length[i] -> none
+    HCI_LE_Extended_Create_Connection[v1]: Initiator_Filter_Policy, Own_Address_Type, Peer_Address_Type, Peer_Address, Initiating_PHYs, Scan_Interval[i], Scan_Window[i], Connection_Interval_Min[i], Connection_Interval_Max[i], Max_Latency[i], Supervision_Timeout[i], Min_CE_Length[i], Max_CE_Length[i] -> none
+  Missing parameters:
+    Advertising_Handle: 0xFF
+    Subevent: 0xFF
   Command parameters:
     Advertising_Handle: 1 octet
     Subevent: 1 octet
@@ -2512,7 +2604,7 @@
     Min_CE_Length[i]: Bits set in Initiating_PHYs × 2 octets
     Max_CE_Length[i]: Bits set in Initiating_PHYs × 2 octets
   Return parameters:
-## 7.8.67 LE Periodic Advertising Create Sync command  [HCI_LE_Periodic_Advertising_Create_-=0x0044]
+## 7.8.67 LE Periodic Advertising Create Sync command  [HCI_LE_Periodic_Advertising_Create_Sync=0x0044]
   Command parameters:
     Options: 1 octet
     Advertising_SID: 1 octet
@@ -2522,23 +2614,23 @@
     Sync_Timeout: 2 octets
     Sync_CTE_Type: 1 octet
   Return parameters:
-## 7.8.68 LE Periodic Advertising Create Sync Cancel command  [HCI_LE_Periodic_Advertising_Create_-=0x0045]
+## 7.8.68 LE Periodic Advertising Create Sync Cancel command  [HCI_LE_Periodic_Advertising_Create_Sync_Cancel=0x0045]
   Command parameters:
   Return parameters:
     Status: 1 octet
-## 7.8.69 LE Periodic Advertising Terminate Sync command  [HCI_LE_Periodic_Advertising_Terminate_-=0x0046]
+## 7.8.69 LE Periodic Advertising Terminate Sync command  [HCI_LE_Periodic_Advertising_Terminate_Sync=0x0046]
   Command parameters:
     Sync_Handle: 2 octets (12 bits meaningful)
   Return parameters:
     Status: 1 octet
-## 7.8.70 LE Add Device To Periodic Advertiser List command  [HCI_LE_Add_Device_To_Periodic_-=0x0047]
+## 7.8.70 LE Add Device To Periodic Advertiser List command  [HCI_LE_Add_Device_To_Periodic_Advertiser_List=0x0047]
   Command parameters:
     Advertiser_Address_Type: 1 octet
     Advertiser_Address: 6 octets
     Advertising_SID: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.71 LE Remove Device From Periodic Advertiser List command  [HCI_LE_Remove_Device_From_-=0x0048]
+## 7.8.71 LE Remove Device From Periodic Advertiser List command  [HCI_LE_Remove_Device_From_Periodic_Advertiser_List=0x0048]
   Command parameters:
     Advertiser_Address_Type: 1 octet
     Advertiser_Address: 6 octets
@@ -2549,7 +2641,7 @@
   Command parameters:
   Return parameters:
     Status: 1 octet
-## 7.8.73 LE Read Periodic Advertiser List Size command  [HCI_LE_Read_Periodic_-=0x004A]
+## 7.8.73 LE Read Periodic Advertiser List Size command  [HCI_LE_Read_Periodic_Advertiser_List_Size=0x004A]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -2560,13 +2652,13 @@
     Status: 1 octet
     Min_TX_Power: 1 octet
     Max_TX_Power: 1 octet
-## 7.8.75 LE Read RF Path Compensation command  [HCI_LE_Read_RF_Path_-=0x004C]
+## 7.8.75 LE Read RF Path Compensation command  [HCI_LE_Read_RF_Path_Compensation=0x004C]
   Command parameters:
   Return parameters:
     Status: 1 octet
     RF_TX_Path_Compensation_Value: 2 octets
     RF_RX_Path_Compensation_Value: 2 octets
-## 7.8.76 LE Write RF Path Compensation command  [HCI_LE_Write_RF_Path_-=0x004D]
+## 7.8.76 LE Write RF Path Compensation command  [HCI_LE_Write_RF_Path_Compensation=0x004D]
   Command parameters:
     RF_TX_Path_Compensation_Value: 2 octets
     RF_RX_Path_Compensation_Value: 2 octets
@@ -2579,7 +2671,7 @@
     Privacy_Mode: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.80 LE Set Connectionless CTE Transmit Parameters command  [HCI_LE_Set_Connectionless_CTE_-=0x0051]
+## 7.8.80 LE Set Connectionless CTE Transmit Parameters command  [HCI_LE_Set_Connectionless_CTE_Transmit_Parameters=0x0051]
   Command parameters:
     Advertising_Handle: 1 octet
     CTE_Length: 1 octet
@@ -2589,13 +2681,13 @@
     Antenna_IDs[i]: Switching_Pattern_Length × 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.81 LE Set Connectionless CTE Transmit Enable command  [HCI_LE_Set_Connectionless_CTE_-=0x0052]
+## 7.8.81 LE Set Connectionless CTE Transmit Enable command  [HCI_LE_Set_Connectionless_CTE_Transmit_Enable=0x0052]
   Command parameters:
     Advertising_Handle: 1 octet
     CTE_Enable: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.82 LE Set Connectionless IQ Sampling Enable command  [HCI_LE_Set_Connectionless_IQ_-=0x0053]
+## 7.8.82 LE Set Connectionless IQ Sampling Enable command  [HCI_LE_Set_Connectionless_IQ_Sampling_Enable=0x0053]
   Command parameters:
     Sync_Handle: 2 octets (12 bits meaningful)
     Sampling_Enable: 1 octet
@@ -2606,7 +2698,7 @@
   Return parameters:
     Status: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
-## 7.8.83 LE Set Connection CTE Receive Parameters command  [HCI_LE_Set_Connection_CTE_-=0x0054]
+## 7.8.83 LE Set Connection CTE Receive Parameters command  [HCI_LE_Set_Connection_CTE_Receive_Parameters=0x0054]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Sampling_Enable: 1 octet
@@ -2616,7 +2708,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.84 LE Set Connection CTE Transmit Parameters command  [HCI_LE_Set_Connection_CTE_-=0x0055]
+## 7.8.84 LE Set Connection CTE Transmit Parameters command  [HCI_LE_Set_Connection_CTE_Transmit_Parameters=0x0055]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     CTE_Types: 1 octet
@@ -2625,7 +2717,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.85 LE Connection CTE Request Enable command  [HCI_LE_Connection_CTE_Request_-=0x0056]
+## 7.8.85 LE Connection CTE Request Enable command  [HCI_LE_Connection_CTE_Request_Enable=0x0056]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Enable: 1 octet
@@ -2635,14 +2727,14 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.86 LE Connection CTE Response Enable command  [HCI_LE_Connection_CTE_Response_-=0x0057]
+## 7.8.86 LE Connection CTE Response Enable command  [HCI_LE_Connection_CTE_Response_Enable=0x0057]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Enable: 1 octet
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.87 LE Read Antenna Information command  [HCI_LE_Read_Antenna_-=0x0058]
+## 7.8.87 LE Read Antenna Information command  [HCI_LE_Read_Antenna_Information=0x0058]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -2650,13 +2742,13 @@
     Num_Antennae: 1 octet
     Max_Switching_Pattern_Length: 1 octet
     Max_CTE_Length: 1 octet
-## 7.8.88 LE Set Periodic Advertising Receive Enable command  [HCI_LE_Set_Periodic_Advertising_-=0x0059]
+## 7.8.88 LE Set Periodic Advertising Receive Enable command  [HCI_LE_Set_Periodic_Advertising_Receive_Enable=0x0059]
   Command parameters:
     Sync_Handle: 2 octets (12 bits meaningful)
     Enable: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.89 LE Periodic Advertising Sync Transfer command  [HCI_LE_Periodic_Advertising_Sync_-=0x005A]
+## 7.8.89 LE Periodic Advertising Sync Transfer command  [HCI_LE_Periodic_Advertising_Sync_Transfer=0x005A]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Service_Data: 2 octets
@@ -2664,7 +2756,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.90 LE Periodic Advertising Set Info Transfer command  [HCI_LE_Periodic_Advertising_Set_Info_-=0x005B]
+## 7.8.90 LE Periodic Advertising Set Info Transfer command  [HCI_LE_Periodic_Advertising_Set_Info_Transfer=0x005B]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Service_Data: 2 octets
@@ -2672,7 +2764,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.91 LE Set Periodic Advertising Sync Transfer Parameters command  [HCI_LE_Set_Periodic_Advertising_-=0x005C]
+## 7.8.91 LE Set Periodic Advertising Sync Transfer Parameters command  [HCI_LE_Set_Periodic_Advertising_Sync_Transfer_Parameters=0x005C]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Mode: 1 octet
@@ -2682,7 +2774,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.92 LE Set Default Periodic Advertising Sync Transfer Parameters command  [HCI_LE_Set_Default_Periodic_-=0x005D]
+## 7.8.92 LE Set Default Periodic Advertising Sync Transfer Parameters command  [HCI_LE_Set_Default_Periodic_Advertising_Sync_Transfer_Parameters=0x005D]
   Command parameters:
     Mode: 1 octet
     Skip: 2 octets
@@ -2889,7 +2981,12 @@
     Missed_SDU_Count: 4 octets
     Failed_SDU_Count: 4 octets
 ## 7.8.115 LE Set Host Feature command  [HCI_LE_Set_Host_Feature[v2]=0x0097 ; HCI_LE_Set_Host_Feature[v1]=0x0074]
+  Versions:
+    HCI_LE_Set_Host_Feature[v2]: Bit_Number, Bit_Value -> Status
+    HCI_LE_Set_Host_Feature[v1]: Bit_Number, Bit_Value -> Status
   Command parameters:
+    Bit_Number[v1]: 1 octet
+    Bit_Number[v2]: 2 octets
     Bit_Value: 1 octet
   Return parameters:
     Status: 1 octet
@@ -2906,7 +3003,7 @@
     CRC_Error_Packets: 4 octets
     RX_Unreceived_Packets: 4 octets
     Duplicate_Packets: 4 octets
-## 7.8.117 LE Enhanced Read Transmit Power Level command  [HCI_LE_Enhanced_Read_-=0x0076]
+## 7.8.117 LE Enhanced Read Transmit Power Level command  [HCI_LE_Enhanced_Read_Transmit_Power_Level=0x0076]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     PHY: 1 octet
@@ -2916,12 +3013,12 @@
     PHY: 1 octet
     Current_TX_Power_Level: 1 octet
     Max_TX_Power_Level: 1 octet
-## 7.8.118 LE Read Remote Transmit Power Level command  [HCI_LE_Read_Remote_Transmit_-=0x0077]
+## 7.8.118 LE Read Remote Transmit Power Level command  [HCI_LE_Read_Remote_Transmit_Power_Level=0x0077]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     PHY: 1 octet
   Return parameters:
-## 7.8.119 LE Set Path Loss Reporting Parameters command  [HCI_LE_Set_Path_Loss_Reporting_-=0x0078]
+## 7.8.119 LE Set Path Loss Reporting Parameters command  [HCI_LE_Set_Path_Loss_Reporting_Parameters=0x0078]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     High_Threshold: 1 octet
@@ -2932,14 +3029,14 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.120 LE Set Path Loss Reporting Enable command  [HCI_LE_Set_Path_Loss_Reporting_-=0x0079]
+## 7.8.120 LE Set Path Loss Reporting Enable command  [HCI_LE_Set_Path_Loss_Reporting_Enable=0x0079]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Enable: 1 octet
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.121 LE Set Transmit Power Reporting Enable command  [HCI_LE_Set_Transmit_Power_-=0x007A]
+## 7.8.121 LE Set Transmit Power Reporting Enable command  [HCI_LE_Set_Transmit_Power_Reporting_Enable=0x007A]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Local_Enable: 1 octet
@@ -2947,7 +3044,7 @@
   Return parameters:
     Status: 1 octet
     Connection_Handle: 2 octets (12 bits meaningful)
-## 7.8.122 LE Set Data Related Address Changes command  [HCI_LE_Set_Data_Related_Address_-=0x007C]
+## 7.8.122 LE Set Data Related Address Changes command  [HCI_LE_Set_Data_Related_Address_Changes=0x007C]
   Command parameters:
     Advertising_Handle: 1 octet
     Change_Reasons: 1 octet
@@ -2971,7 +3068,7 @@
     Continuation_Number: 2 octets
     Supervision_Timeout: 2 octets
   Return parameters:
-## 7.8.125 LE Set Periodic Advertising Subevent Data command  [HCI_LE_Set_Periodic_Advertising_-=0x0082]
+## 7.8.125 LE Set Periodic Advertising Subevent Data command  [HCI_LE_Set_Periodic_Advertising_Subevent_Data=0x0082]
   Command parameters:
     Advertising_Handle: 1 octet
     Num_Subevents_With_Data: 1 octet
@@ -2983,7 +3080,7 @@
   Return parameters:
     Status: 1 octet
     Advertising_Handle: 1 octet
-## 7.8.126 LE Set Periodic Advertising Response Data command  [HCI_LE_Set_Periodic_Advertising_-=0x0083]
+## 7.8.126 LE Set Periodic Advertising Response Data command  [HCI_LE_Set_Periodic_Advertising_Response_Data=0x0083]
   Command parameters:
     Sync_Handle: 2 octets (12 bits meaningful)
     Request_Event: 2 octets
@@ -2995,7 +3092,7 @@
   Return parameters:
     Status: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
-## 7.8.127 LE Set Periodic Sync Subevent command  [HCI_LE_Set_Periodic_Sync_-=0x0084]
+## 7.8.127 LE Set Periodic Sync Subevent command  [HCI_LE_Set_Periodic_Sync_Subevent=0x0084]
   Command parameters:
     Sync_Handle: 2 octets (12 bits meaningful)
     Periodic_Advertising_Properties: 2 octets
@@ -3004,7 +3101,7 @@
   Return parameters:
     Status: 1 octet
     Sync_Handle: 2 octets (12 bits meaningful)
-## 7.8.128 LE Read All Local Supported Features command  [HCI_LE_Read_All_Local_Supported_-=0x0087]
+## 7.8.128 LE Read All Local Supported Features command  [HCI_LE_Read_All_Local_Supported_Features=0x0087]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -3015,7 +3112,10 @@
     Connection_Handle: 2 octets (12 bits meaningful)
     Pages_Requested: 1 octet
   Return parameters:
-## 7.8.130 LE CS Read Local Supported Capabilities command  [HCI_LE_CS_Read_Local_-=0x00A5 ; HCI_LE_CS_Read_Local_-=0x0089]
+## 7.8.130 LE CS Read Local Supported Capabilities command  [HCI_LE_CS_Read_Local_Supported_Capabilities[v2]=0x00A5 ; HCI_LE_CS_Read_Local_Supported_Capabilities[v1]=0x0089]
+  Versions:
+    HCI_LE_CS_Read_Local_Supported_Capabilities[v2]: none -> Status, Num_Config_Supported, Max_Consecutive_Procedures_Supported, Num_Antennae_Supported, Max_Antenna_Paths_Supported, Roles_Supported, Modes_Supported, RTT_Capability, RTT_AA_Only_N, RTT_Sounding_N, RTT_Random_Sequence_N, NADM_Sounding_Capability, NADM_Random_Capability, CS_SYNC_PHYs_Supported, Subfeatures_Supported, T_IP1_Times_Supported, T_IP2_Times_Supported, T_FCS_Times_Supported, T_PM_Times_Supported, T_SW_Time_Supported, TX_SNR_Capability, T_IP2_IPT_Times_Supported, T_SW_IPT_Times_Supported, RTT_2M_AA_Only_N, RTT_2M_Sounding_N, RTT_2M_Random_Sequence_N
+    HCI_LE_CS_Read_Local_Supported_Capabilities[v1]: none -> Status, Num_Config_Supported, Max_Consecutive_Procedures_Supported, Num_Antennae_Supported, Max_Antenna_Paths_Supported, Roles_Supported, Modes_Supported, RTT_Capability, RTT_AA_Only_N, RTT_Sounding_N, RTT_Random_Sequence_N, NADM_Sounding_Capability, NADM_Random_Capability, CS_SYNC_PHYs_Supported, Subfeatures_Supported, T_IP1_Times_Supported, T_IP2_Times_Supported, T_FCS_Times_Supported, T_PM_Times_Supported, T_SW_Time_Supported, TX_SNR_Capability
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -3044,11 +3144,20 @@
     RTT_2M_AA_Only_N: 1 octet
     RTT_2M_Sounding_N: 1 octet
     RTT_2M_Random_Sequence_N: 1 octet
-## 7.8.131 LE CS Read Remote Supported Capabilities command  [HCI_LE_CS_Read_Remote_Supported_-=0x008A]
+## 7.8.131 LE CS Read Remote Supported Capabilities command  [HCI_LE_CS_Read_Remote_Supported_Capabilities=0x008A]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
   Return parameters:
-## 7.8.132 LE CS Write Cached Remote Supported Capabilities command  [HCI_LE_CS_Write_-=0x00A6 ; HCI_LE_CS_Write_-=0x008B]
+## 7.8.132 LE CS Write Cached Remote Supported Capabilities command  [HCI_LE_CS_Write_Cached_Remote_Supported_Capabilities[v2]=0x00A6 ; HCI_LE_CS_Write_Cached_Remote_Supported_Capabilities[v1]=0x008B]
+  Versions:
+    HCI_LE_CS_Write_Cached_Remote_Supported_Capabilities[v2]: Connection_Handle, Num_Config_Supported, Max_Consecutive_Procedures_Supported, Num_Antennae_Supported, Max_Antenna_Paths_Supported, Roles_Supported, Modes_Supported, RTT_Capability, RTT_AA_Only_N, RTT_Sounding_N, RTT_Random_Sequence_N, NADM_Sounding_Capability, NADM_Random_Capability, CS_SYNC_PHYs_Supported, Subfeatures_Supported, T_IP1_Times_Supported, T_IP2_Times_Supported, T_FCS_Times_Supported, T_PM_Times_Supported, T_SW_Time_Supported, TX_SNR_Capability, T_IP2_IPT_Times_Supported, T_SW_IPT_Times_Supported, RTT_2M_AA_Only_N, RTT_2M_Sounding_N, RTT_2M_Random_Sequence_N -> Status, Connection_Handle
+    HCI_LE_CS_Write_Cached_Remote_Supported_Capabilities[v1]: Connection_Handle, Num_Config_Supported, Max_Consecutive_Procedures_Supported, Num_Antennae_Supported, Max_Antenna_Paths_Supported, Roles_Supported, Modes_Supported, RTT_Capability, RTT_AA_Only_N, RTT_Sounding_N, RTT_Random_Sequence_N, NADM_Sounding_Capability, NADM_Random_Capability, CS_SYNC_PHYs_Supported, Subfeatures_Supported, T_IP1_Times_Supported, T_IP2_Times_Supported, T_FCS_Times_Supported, T_PM_Times_Supported, T_SW_Time_Supported, TX_SNR_Capability -> Status, Connection_Handle
+  Missing parameters:
+    T_IP2_IPT_Times_Supported: 0x0000
+    T_SW_IPT_Times_Supported: 0x00
+    RTT_2M_AA_Only_N: Equal to the value used for RTT_AA_Only_N
+    RTT_2M_Sounding_N: Equal to the value used for RTT_Sounding_N
+    RTT_2M_Random_Sequence_N: Equal to the value used for RTT_Random_Se-
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Num_Config_Supported: 1 octet
@@ -3096,7 +3205,7 @@
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
   Return parameters:
-## 7.8.136 LE CS Write Cached Remote FAE Table command  [HCI_LE_CS_Write_Cached_Remote_-=0x008F]
+## 7.8.136 LE CS Write Cached Remote FAE Table command  [HCI_LE_CS_Write_Cached_Remote_FAE_Table=0x008F]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Remote_FAE_Table: 72 octets
@@ -3134,7 +3243,7 @@
     Channel_Classification: 10 octets (79 bits meaningful)
   Return parameters:
     Status: 1 octet
-## 7.8.140 LE CS Set Procedure Parameters command  [HCI_LE_CS_Set_Procedure_-=0x0093]
+## 7.8.140 LE CS Set Procedure Parameters command  [HCI_LE_CS_Set_Procedure_Parameters=0x0093]
   Command parameters:
     Connection_Handle: 2 octets (12 bits meaningful)
     Config_ID: 1 octet
@@ -3224,7 +3333,7 @@
     Test_Parameters[i]: Num_Tests × 16 octets
   Return parameters:
     Status: 1 octet
-## 7.8.146 LE Add Device To Monitored Advertisers List command  [HCI_LE_Add_Device_To_Monitored_-=0x0098]
+## 7.8.146 LE Add Device To Monitored Advertisers List command  [HCI_LE_Add_Device_To_Monitored_Advertisers_List=0x0098]
   Command parameters:
     Address_Type: 1 octet
     Address: 6 octets
@@ -3233,7 +3342,7 @@
     Timeout: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.147 LE Remove Device From Monitored Advertisers List command  [HCI_LE_Remove_Device_From_-=0x0099]
+## 7.8.147 LE Remove Device From Monitored Advertisers List command  [HCI_LE_Remove_Device_From_Monitored_Advertisers_List=0x0099]
   Command parameters:
     Address_Type: 1 octet
     Address: 6 octets
@@ -3248,7 +3357,7 @@
     Enable: 1 octet
   Return parameters:
     Status: 1 octet
-## 7.8.150 LE Read Monitored Advertisers List Size command  [HCI_LE_Read_Monitored_Advertisers_-=0x009B]
+## 7.8.150 LE Read Monitored Advertisers List Size command  [HCI_LE_Read_Monitored_Advertisers_List_Size=0x009B]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -3262,11 +3371,15 @@
     Spacing_Types: 2 octets
   Return parameters:
 ## 7.8.152 LE Enable UTP OTA mode command  [HCI_LE_Enable_UTP_OTA_Mode=0x009F]
+  Command parameters:
     Enable: 1 octet
+  Return parameters:
     Status: 1 octet
 ## 7.8.153 LE UTP Send command  [HCI_LE_UTP_Send=0x00A0]
+  Command parameters:
     UTP_Data_Length: 1 octet
     UTP_Data: UTP_Data_Length octets
+  Return parameters:
     Status: 1 octet
 ## 7.8.154 LE Connection Rate Request command  [HCI_LE_Connection_Rate_Request=0x00A1]
   Command parameters:
@@ -3294,7 +3407,7 @@
     Max_CE_Length: 2 octets
   Return parameters:
     Status: 1 octet
-## 7.8.156 LE Read Minimum Supported Connection Interval command  [HCI_LE_Read_Minimum_-=0x00A3]
+## 7.8.156 LE Read Minimum Supported Connection Interval command  [HCI_LE_Read_Minimum_Supported_Connection_Interval=0x00A3]
   Command parameters:
   Return parameters:
     Status: 1 octet
@@ -3303,3 +3416,15 @@
     Group_Min[i]: 2 octets
     Group_Max[i]: 2 octets
     Group_Stride[i]: 2 octets
+## 7.8.157 LE CS Set Security Requirements command  [HCI_LE_CS_Set_Security_Requirements=0x00A7]
+  Command parameters:
+    Connection_Handle: 2 octets (12 bits meaningful)
+    CS_Security_Requirements: 8 octets
+  Return parameters:
+    Status: 1 octet
+    Connection_Handle: 2 octets (12 bits meaningful)
+## 7.8.158 CS Set Default Security Requirements command  [HCI_LE_CS_Set_Default_Security_Requirements=0x00A8]
+  Command parameters:
+    CS_Security_Requirements: 8 octets
+  Return parameters:
+    Status: 1 octet

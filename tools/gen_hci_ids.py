@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Generate crates/hcimon-decode/src/hci/ids.rs from the spec-derived reference.
 
-The reference file (tools/hci_ref_v6.3.txt) is produced from the text of the
-Bluetooth Core Specification (Vol 4, Part E) and lists every command / event
-section together with its opcode, event code or subevent code.  Commands and
-events that were removed from the specification (AMP, park state, ...) are
-listed in the EXTRA_* tables below so old captures still decode with a name.
+The reference file (tools/hci_ref_v6.3.txt) is made from the text of the
+Bluetooth Core Specification (Vol 4, Part E) by tools/gen_hci_ref.py and lists
+every command and event section together with the opcode, event code or event
+and subevent code of each version.  Commands and events that were removed from
+the specification (AMP, park state, ...) are listed in the EXTRA_* tables below
+so old captures still decode with a name.
 
 Usage:  tools/gen_hci_ids.py > crates/hcimon-decode/src/hci/ids.rs
 """
@@ -77,24 +78,6 @@ EXTRA_EVENTS = [
     (0x55, "Slot Availability Mask Change"),  # never allocated; placeholder retained for older tooling
 ]
 
-# Subevents whose code line is wrapped in the spec text and therefore not in the reference.
-EXTRA_LE_EVENTS = [
-    (0x19, "LE CIS Established"),
-    (0x1A, "LE CIS Request"),
-    (0x1B, "LE Create BIG Complete"),
-    (0x1C, "LE Terminate BIG Complete"),
-    (0x1D, "LE BIG Sync Established"),
-    (0x1E, "LE BIG Sync Lost"),
-    (0x1F, "LE Request Peer SCA Complete"),
-    (0x23, "LE Subrate Change"),
-    (0x24, "LE Periodic Advertising Sync Established v2"),
-    (0x25, "LE Periodic Advertising Report v2"),
-    (0x26, "LE Periodic Advertising Sync Transfer Received v2"),
-    (0x29, "LE Enhanced Connection Complete v2"),
-    (0x2A, "LE CIS Established v2"),
-    (0x38, "LE CS Read Remote Supported Capabilities Complete v2"),
-]
-
 # Names that should not be taken from the section title.
 EVENT_TITLE_OVERRIDES = {
     "7.7.5": "Disconnection Complete",
@@ -106,9 +89,25 @@ def const_name(name: str) -> str:
     return s
 
 
+def versioned_names(title: str, found: dict) -> dict:
+    """Names by code for the versions of one command or event.
+
+    `found` maps each code to its version number, or None when the reference
+    gives none; those are numbered in code order.  Version 1 keeps the plain
+    title so that the names of commands and events stay the same when the
+    specification adds a version.
+    """
+    codes = sorted(found)
+    names = {}
+    for i, c in enumerate(codes):
+        ver = found[c] if found[c] is not None else i + 1
+        names[c] = title if (len(codes) == 1 or ver == 1) else f"{title} v{ver}"
+    return names
+
+
 def main() -> None:
-    sec_re = re.compile(r"^## (7\.\d+(?:\.\d+)+) (.+?) (command|event)  \[(.*?)\](?: subevent=(0x[0-9A-Fa-f]{2}))?$")
-    pair_re = re.compile(r"(HCI_[A-Za-z0-9_\-]+?)(\[v\d\])?=(0x[0-9A-Fa-f]{2,4})")
+    sec_re = re.compile(r"^## (7\.\d+(?:\.\d+)+) (.+?) (command|event)  \[(.*?)\]$")
+    pair_re = re.compile(r"(HCI_[A-Za-z0-9_\-]+?)(?:\[v(\d+)\])?=(0x[0-9A-Fa-f]{2,4})(?:/(0x[0-9A-Fa-f]{2}))?")
 
     commands = {}  # opcode -> name
     events = {}
@@ -118,7 +117,7 @@ def main() -> None:
         m = sec_re.match(line)
         if not m:
             continue
-        num, title, kind, pairs, subevent = m.groups()
+        num, title, kind, pairs = m.groups()
         title = title.strip()
         top = ".".join(num.split(".")[:2])
         if kind == "command":
@@ -126,55 +125,38 @@ def main() -> None:
             if ogf is None:
                 continue
             found = {}
-            for name, ver, code in pair_re.findall(pairs):
-                if len(code) != 6:
-                    continue
-                ocf = int(code, 16)
-                if ver:
-                    found[ocf] = int(ver[2])
-                else:
-                    found.setdefault(ocf, None)
-            ocfs = sorted(found)
-            if not ocfs:
+            for _, ver, code, _ in pair_re.findall(pairs):
+                if len(code) == 6:
+                    found[int(code, 16)] = int(ver) if ver else None
+            if not found:
                 print(f"warning: no opcode for {num} {title}", file=sys.stderr)
                 continue
-            for i, ocf in enumerate(ocfs):
-                ver = found[ocf]
-                if ver is None:
-                    ver = i + 1
-                name = title if (len(ocfs) == 1 or ver == 1) else f"{title} v{ver}"
+            for ocf, name in versioned_names(title, found).items():
                 commands[(ogf << 10) | ocf] = name
         else:
             if num.startswith("7.7.65."):
-                if subevent:
-                    le_events[int(subevent, 16)] = title
+                found = {}
+                for _, ver, _, sub in pair_re.findall(pairs):
+                    if sub:
+                        found[int(sub, 16)] = int(ver) if ver else None
+                if not found:
+                    print(f"warning: no subevent code for {num} {title}", file=sys.stderr)
+                le_events.update(versioned_names(title, found))
                 continue
             if num.count(".") != 2:
                 continue
             found = {}
-            for _, ver, code in pair_re.findall(pairs):
-                if len(code) != 4 or code.upper() == "0X3E":
-                    continue
-                c = int(code, 16)
-                if ver:
-                    found[c] = int(ver[2])
-                else:
-                    found.setdefault(c, None)
+            for _, ver, code, _ in pair_re.findall(pairs):
+                if len(code) == 4 and code.upper() != "0X3E":
+                    found[int(code, 16)] = int(ver) if ver else None
             title = EVENT_TITLE_OVERRIDES.get(num, title)
-            codes = sorted(found)
-            for i, c in enumerate(codes):
-                ver = found[c]
-                if ver is None:
-                    ver = i + 1
-                events[c] = title if (len(codes) == 1 or ver == 1) else f"{title} v{ver}"
+            events.update(versioned_names(title, found))
 
     for ogf, ocf, name in EXTRA_COMMANDS:
         commands.setdefault((ogf << 10) | ocf, name)
     for code, name in EXTRA_EVENTS:
         events.setdefault(code, name)
     events.setdefault(0x3E, "LE Meta")
-    for code, name in EXTRA_LE_EVENTS:
-        le_events.setdefault(code, name)
 
     out = []
     w = out.append
