@@ -124,7 +124,7 @@ discovery responses.
 
 ## Reference material
 
-* `tools/hci_ref_v6.3.txt` — every HCI command/event of Core Spec v6.3 with
+* `tools/hci_ref_v7.0.txt` — every HCI command/event of Core Spec v7.0 with
   its opcode and the ordered list of parameters with sizes.  Search it for the
   section (e.g. `## 7.8.53 LE Set Extended Advertising Parameters command`).
   A command or event with several versions lists the opcode or code of each
